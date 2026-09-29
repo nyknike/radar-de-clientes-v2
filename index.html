@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Radar de Clientes — V2</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div>
+    <h1>Radar de Clientes</h1>
+    <p>Prospecção local para sites e design.</p>
+  </div>
+  <span class="badge">V2 • atualizado</span>
+</header>
+
+<main>
+<section class="panel">
+  <h2>🔎 Encontrar oportunidades</h2>
+  <div class="grid">
+    <label>Cidade ou região
+      <input id="location" placeholder="Ex.: Florianópolis, SC">
+    </label>
+    <label>Categoria
+      <select id="category">
+        <option value="all">Todos</option>
+        <option value="shop">Lojas</option>
+        <option value="restaurant">Restaurantes</option>
+        <option value="fast_food">Lanchonetes / fast-food</option>
+        <option value="cafe">Cafés</option>
+        <option value="hairdresser">Barbearias / salões</option>
+        <option value="gym">Academias</option>
+        <option value="clinic">Clínicas</option>
+        <option value="hotel">Hotéis</option>
+        <option value="car_repair">Oficinas</option>
+        <option value="bakery">Padarias</option>
+        <option value="pizza">Pizzarias</option>
+      </select>
+    </label>
+    <label>Raio
+      <select id="radius">
+        <option value="1000">1 km</option>
+        <option value="3000">3 km</option>
+        <option value="5000" selected>5 km</option>
+        <option value="10000">10 km</option>
+        <option value="20000">20 km</option>
+      </select>
+    </label>
+  </div>
+  <div class="actions">
+    <button id="locateBtn" class="secondary">📍 Usar minha localização</button>
+    <button id="searchBtn">🔍 Encontrar oportunidades</button>
+  </div>
+  <p class="hint">Os dados de presença física são consultados ao vivo no OpenStreetMap/Overpass. O horário da base consultada aparece nos resultados.</p>
+</section>
+
+<section id="status" class="status hidden"></section>
+
+<section class="filters panel hidden" id="filters">
+  <strong>Mostrar:</strong>
+  <button class="filter active" data-filter="all">Todos</button>
+  <button class="filter" data-filter="website">Sem site</button>
+  <button class="filter" data-filter="instagram">Sem Instagram cadastrado</button>
+  <button class="filter" data-filter="design">Oportunidade de design</button>
+</section>
+
+<section class="summary hidden" id="summary">
+  <div><strong id="total">0</strong><span>encontrados agora</span></div>
+  <div><strong id="noSite">0</strong><span>sem site cadastrado</span></div>
+  <div><strong id="design">0</strong><span>oportunidades de design</span></div>
+</section>
+
+<section id="results" class="results"></section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
