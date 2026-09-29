@@ -1,79 +1,118 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Radar de Clientes — V2</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Radar de Clientes V3</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-<header>
+
+<header class="header">
   <div>
     <h1>Radar de Clientes</h1>
-    <p>Prospecção local para sites e design.</p>
+    <p>Encontre negócios locais e oportunidades para sites e design.</p>
   </div>
-  <span class="badge">V2 • atualizado</span>
+
+  <span class="version">V3</span>
 </header>
 
 <main>
-<section class="panel">
-  <h2>🔎 Encontrar oportunidades</h2>
-  <div class="grid">
-    <label>Cidade ou região
-      <input id="location" placeholder="Ex.: Florianópolis, SC">
-    </label>
-    <label>Categoria
-      <select id="category">
-        <option value="all">Todos</option>
-        <option value="shop">Lojas</option>
-        <option value="restaurant">Restaurantes</option>
-        <option value="fast_food">Lanchonetes / fast-food</option>
-        <option value="cafe">Cafés</option>
-        <option value="hairdresser">Barbearias / salões</option>
-        <option value="gym">Academias</option>
-        <option value="clinic">Clínicas</option>
-        <option value="hotel">Hotéis</option>
-        <option value="car_repair">Oficinas</option>
-        <option value="bakery">Padarias</option>
-        <option value="pizza">Pizzarias</option>
-      </select>
-    </label>
-    <label>Raio
-      <select id="radius">
-        <option value="1000">1 km</option>
-        <option value="3000">3 km</option>
-        <option value="5000" selected>5 km</option>
-        <option value="10000">10 km</option>
-        <option value="20000">20 km</option>
-      </select>
-    </label>
+
+  <section class="panel">
+
+    <h2>🔎 Pesquisar negócios</h2>
+
+    <div class="grid">
+
+      <label>
+        Localização
+        <input
+          id="location"
+          type="text"
+          placeholder="Ex.: Florianópolis, SC"
+        >
+      </label>
+
+      <label>
+        Categoria
+        <select id="category">
+          <option value="all">Todos</option>
+          <option value="restaurant">Restaurantes</option>
+          <option value="pizza">Pizzarias</option>
+          <option value="fast_food">Lanchonetes</option>
+          <option value="shop">Lojas</option>
+          <option value="hairdresser">Barbearias / Salões</option>
+          <option value="cafe">Cafés</option>
+          <option value="gym">Academias</option>
+          <option value="clinic">Clínicas</option>
+          <option value="hotel">Hotéis</option>
+          <option value="car_repair">Oficinas</option>
+          <option value="bakery">Padarias</option>
+        </select>
+      </label>
+
+      <label>
+        Raio
+        <select id="radius">
+          <option value="1000">1 km</option>
+          <option value="3000">3 km</option>
+          <option value="5000" selected>5 km</option>
+          <option value="10000">10 km</option>
+          <option value="20000">20 km</option>
+        </select>
+      </label>
+
+    </div>
+
+    <div class="actions">
+
+      <button id="locate" class="secondary">
+        📍 Usar minha localização
+      </button>
+
+      <button id="search">
+        🔍 Pesquisar
+      </button>
+
+    </div>
+
+    <p class="hint">
+      Os dados são consultados em bases públicas. Telefones, WhatsApp,
+      Instagram e sites aparecem quando estiverem cadastrados.
+    </p>
+
+  </section>
+
+  <div id="status" class="status">
+    Pronto para pesquisar.
   </div>
-  <div class="actions">
-    <button id="locateBtn" class="secondary">📍 Usar minha localização</button>
-    <button id="searchBtn">🔍 Encontrar oportunidades</button>
-  </div>
-  <p class="hint">Os dados de presença física são consultados ao vivo no OpenStreetMap/Overpass. O horário da base consultada aparece nos resultados.</p>
-</section>
 
-<section id="status" class="status hidden"></section>
+  <section class="summary">
 
-<section class="filters panel hidden" id="filters">
-  <strong>Mostrar:</strong>
-  <button class="filter active" data-filter="all">Todos</button>
-  <button class="filter" data-filter="website">Sem site</button>
-  <button class="filter" data-filter="instagram">Sem Instagram cadastrado</button>
-  <button class="filter" data-filter="design">Oportunidade de design</button>
-</section>
+    <div>
+      <strong id="count">0</strong>
+      <span>negócios</span>
+    </div>
 
-<section class="summary hidden" id="summary">
-  <div><strong id="total">0</strong><span>encontrados agora</span></div>
-  <div><strong id="noSite">0</strong><span>sem site cadastrado</span></div>
-  <div><strong id="design">0</strong><span>oportunidades de design</span></div>
-</section>
+    <div>
+      <strong id="siteOpp">0</strong>
+      <span>sem site</span>
+    </div>
 
-<section id="results" class="results"></section>
+    <div>
+      <strong id="opp">0</strong>
+      <span>sinais de oportunidade</span>
+    </div>
+
+  </section>
+
+  <section id="results" class="results"></section>
+
 </main>
 
 <script src="app.js"></script>
+
 </body>
 </html>
