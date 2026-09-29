@@ -1,123 +1,799 @@
-const $=id=>document.getElementById(id);
-let allResults=[];
-let currentFilter='all';
+const $ = (id) => document.getElementById(id);
 
-const cat = {
-  shop:'shop',
-  restaurant:'amenity=restaurant',
-  fast_food:'amenity=fast_food',
-  cafe:'amenity=cafe',
-  hairdresser:'shop=hairdresser',
-  gym:'leisure=fitness_centre',
-  clinic:'amenity=clinic',
-  hotel:'tourism=hotel',
-  car_repair:'shop=car_repair',
-  bakery:'shop=bakery',
-  pizza:'cuisine=pizza'
-};
+const OVERPASS_SERVERS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter"
+];
 
-function status(msg,error=false){
-  const e=$('status'); e.className='status'; e.textContent=msg;
-  e.style.borderColor=error?'#714044':'#303c52';
+function showStatus(message, error = false) {
+
+  const status = $("status");
+
+  status.textContent = message;
+
+  status.style.borderColor =
+    error ? "#713f47" : "#33415a";
 }
-function esc(s=''){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
-function coords(e){return {lat:Number(e.lat??e.center?.lat),lon:Number(e.lon??e.center?.lon)}}
-function dist(a,b){
-  const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
-  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+
+function escapeHTML(value = "") {
+
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[char]));
+
 }
-async function geocode(place){
-  const u=`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(place)}`;
-  const r=await fetch(u,{headers:{Accept:'application/json'}}); if(!r.ok)throw Error('Falha ao localizar a região.');
-  const d=await r.json(); if(!d.length)throw Error('Local não encontrado.');
-  return {lat:+d[0].lat,lon:+d[0].lon,name:d[0].display_name};
+
+async function geocode(place) {
+
+  const response = await fetch(
+    "https://nominatim.openstreetmap.org/search?" +
+    new URLSearchParams({
+      format: "jsonv2",
+      limit: "1",
+      q: place
+    })
+  );
+
+  if (!response.ok) {
+    throw new Error("Não foi possível localizar o lugar.");
+  }
+
+  const data = await response.json();
+
+  if (!data.length) {
+    throw new Error("Local não encontrado.");
+  }
+
+  return {
+    lat: Number(data[0].lat),
+    lon: Number(data[0].lon),
+    name: data[0].display_name
+  };
+
 }
-function query(lat,lon,r,c){
-  const a=`(around:${r},${lat},${lon})`;
-  if(c==='all')return `[out:json][timeout:40];(nwr${a}[name][shop];nwr${a}[name][amenity~"restaurant|fast_food|cafe|clinic"];nwr${a}[name][tourism=hotel];nwr${a}[name][leisure=fitness_centre];);out center tags meta;`;
-  if(c==='pizza')return `[out:json][timeout:40];nwr${a}[name][cuisine~"pizza",i];out center tags meta;`;
-  const [k,v]=cat[c].split('=');
-  return v?`[out:json][timeout:40];nwr${a}[name][${k}=${v}];out center tags meta;`:`[out:json][timeout:40];nwr${a}[name][${k}];out center tags meta;`;
+
+function calculateDistance(a, b) {
+
+  const R = 6371;
+
+  const dLat =
+    (b.lat - a.lat) * Math.PI / 180;
+
+  const dLon =
+    (b.lon - a.lon) * Math.PI / 180;
+
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) *
+    Math.cos(b.lat * Math.PI / 180) *
+    Math.sin(dLon / 2) ** 2;
+
+  return R *
+    2 *
+    Math.atan2(
+      Math.sqrt(x),
+      Math.sqrt(1 - x)
+    );
+
 }
-async function overpass(q){
-  for(const ep of ['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter']){
-    try{const r=await fetch(ep,{method:'POST',body:q});if(r.ok)return await r.json()}catch(e){}
-  } throw Error('Os servidores de mapa estão ocupados. Tente novamente.');
+
+function buildQuery(center, radius, category) {
+
+  const area =
+    `(around:${radius},${center.lat},${center.lon})`;
+
+  const categories = {
+
+    restaurant: "amenity=restaurant",
+
+    fast_food: "amenity=fast_food",
+
+    shop: "shop",
+
+    hairdresser: "shop=hairdresser",
+
+    cafe: "amenity=cafe",
+
+    gym: "leisure=fitness_centre",
+
+    clinic: "amenity=clinic",
+
+    hotel: "tourism=hotel",
+
+    car_repair: "shop=car_repair",
+
+    bakery: "shop=bakery"
+
+  };
+
+  if (category === "pizza") {
+
+    return `
+      [out:json][timeout:20];
+
+      nwr${area}
+      [name]
+      [cuisine~"pizza",i];
+
+      out center tags;
+    `;
+
+  }
+
+  if (category === "all") {
+
+    return `
+      [out:json][timeout:20];
+
+      (
+        nwr${area}[name][shop];
+
+        nwr${area}[name]
+        [amenity~"restaurant|fast_food|cafe|clinic"];
+
+        nwr${area}[name][tourism=hotel];
+
+        nwr${area}[name]
+        [leisure=fitness_centre];
+      );
+
+      out center tags;
+    `;
+
+  }
+
+  const parts =
+    (categories[category] || "shop").split("=");
+
+  const key = parts[0];
+
+  const value = parts[1];
+
+  return `
+    [out:json][timeout:20];
+
+    nwr${area}
+    [name]
+    [${key}${value ? "=" + value : ""}];
+
+    out center tags;
+  `;
+
 }
-function normalizeInstagram(v=''){
-  if(!v)return '';
-  if(v.startsWith('http'))return v;
-  const u=v.replace(/^@/,'');
-  return `https://www.instagram.com/${u}/`;
+
+async function queryOverpass(query) {
+
+  for (const server of OVERPASS_SERVERS) {
+
+    try {
+
+      const controller =
+        new AbortController();
+
+      const timeout =
+        setTimeout(
+          () => controller.abort(),
+          22000
+        );
+
+      const response =
+        await fetch(server, {
+          method: "POST",
+          body: query,
+          signal: controller.signal
+        });
+
+      clearTimeout(timeout);
+
+      if (response.ok) {
+
+        return await response.json();
+
+      }
+
+    } catch (error) {
+
+      // tenta o próximo servidor
+
+    }
+
+  }
+
+  throw new Error(
+    "Os servidores de mapas estão ocupados. Tente novamente em alguns segundos."
+  );
+
 }
-function opportunity(x){
-  // Conservative: no automatic claim that a visual design is "bad".
-  // These are lead signals, not proof.
-  const signals=[];
-  if(!x.website)signals.push('sem site cadastrado');
-  if(!x.instagram)signals.push('sem Instagram cadastrado');
-  if(x.name.length<4)signals.push('cadastro incompleto');
-  return signals;
+
+function formatInstagram(value) {
+
+  if (!value) return "";
+
+  if (value.startsWith("http")) {
+    return value;
+  }
+
+  return (
+    "https://www.instagram.com/" +
+    value.replace(/^@/, "") +
+    "/"
+  );
+
 }
-function render(){
-  const arr=allResults.filter(x=>{
-    if(currentFilter==='website')return !x.website;
-    if(currentFilter==='instagram')return !x.instagram;
-    if(currentFilter==='design')return x.designSignals.length>0;
-    return true;
-  });
-  $('results').innerHTML=arr.length?arr.map(x=>card(x)).join(''):'<div class="empty">Nenhum resultado nesse filtro.</div>';
-  $('total').textContent=allResults.length;
-  $('noSite').textContent=allResults.filter(x=>!x.website).length;
-  $('design').textContent=allResults.filter(x=>x.designSignals.length).length;
+
+function formatWhatsApp(value) {
+
+  if (!value) return "";
+
+  if (value.startsWith("http")) {
+    return value;
+  }
+
+  let number =
+    value.replace(/\D/g, "");
+
+  if (!number) return "";
+
+  if (
+    number.length === 10 ||
+    number.length === 11
+  ) {
+    number = "55" + number;
+  }
+
+  return "https://wa.me/" + number;
+
 }
-function card(x){
-  const tags=[];
-  tags.push(`<span class="tag good">✓ encontrado agora</span>`);
-  if(x.website)tags.push('<span class="tag">site cadastrado</span>');else tags.push('<span class="tag bad">sem site</span>');
-  if(x.instagram)tags.push('<span class="tag">Instagram</span>');else tags.push('<span class="tag warn">Instagram não cadastrado</span>');
-  const ig=x.instagram?`<a href="${esc(x.instagram)}" target="_blank" rel="noopener">📷 Instagram</a>`:'';
-  const web=x.website?`<a href="${esc(x.website)}" target="_blank" rel="noopener">🌐 Site</a>`:'';
-  const phone=x.phone?`<a href="tel:${esc(x.phone)}">📞 Ligar</a><button class="copy" data-copy="${esc(x.phone)}">📋 Copiar telefone</button>`:'';
-  const igcopy=x.instagram?`<button class="copy" data-copy="${esc(x.instagram)}">📋 Copiar Instagram</button>`:'';
-  const maps=`<a href="https://www.openstreetmap.org/?mlat=${x.lat}&mlon=${x.lon}#map=18/${x.lat}/${x.lon}" target="_blank" rel="noopener">🗺️ Mapa</a>`;
-  return `<article class="card"><h3>${esc(x.name)}</h3><div class="tags">${tags.join('')}</div><div class="meta">📍 ${x.distance.toFixed(1)} km<br>${x.phone?'📞 '+esc(x.phone)+'<br>':''}${x.address?'🏠 '+esc(x.address)+'<br>':''}</div><div class="links">${phone}${ig}${igcopy}${web}${maps}</div>${x.designSignals.length?`<div class="design-note">🎨 Possível oportunidade de design: ${esc(x.designSignals.join(', '))}. Isso é um sinal de prospecção, não uma avaliação automática de qualidade visual.</div>`:''}<div class="fresh">Dados do mapa: ${esc(x.updated||'horário da base não informado')} • última edição do objeto: ${esc(x.edited||'não informada')}</div></article>`;
+
+function renderBusiness(business) {
+
+  let phoneActions = "";
+
+  if (business.phone) {
+
+    phoneActions = `
+
+      <a href="tel:${escapeHTML(business.phone)}">
+        📞 Ligar
+      </a>
+
+      <button
+        data-copy="${escapeHTML(business.phone)}">
+        📋 Copiar telefone
+      </button>
+
+    `;
+
+  }
+
+  let whatsappActions = "";
+
+  if (business.whatsapp) {
+
+    whatsappActions = `
+
+      <a
+        href="${escapeHTML(business.whatsapp)}"
+        target="_blank"
+        rel="noopener">
+        💬 Abrir WhatsApp
+      </a>
+
+      <button
+        data-copy="${escapeHTML(business.whatsapp)}">
+        📋 Copiar WhatsApp
+      </button>
+
+    `;
+
+  }
+
+  let instagramActions = "";
+
+  if (business.instagram) {
+
+    instagramActions = `
+
+      <a
+        href="${escapeHTML(business.instagram)}"
+        target="_blank"
+        rel="noopener">
+        📷 Instagram
+      </a>
+
+      <button
+        data-copy="${escapeHTML(business.instagram)}">
+        📋 Copiar Instagram
+      </button>
+
+    `;
+
+  }
+
+  let websiteActions = "";
+
+  if (business.website) {
+
+    websiteActions = `
+
+      <a
+        href="${escapeHTML(business.website)}"
+        target="_blank"
+        rel="noopener">
+        🌐 Site
+      </a>
+
+    `;
+
+  }
+
+  const mapActions = `
+
+    <a
+      href="https://www.openstreetmap.org/?mlat=${business.lat}&mlon=${business.lon}#map=18/${business.lat}/${business.lon}"
+      target="_blank"
+      rel="noopener">
+      🗺️ Mapa
+    </a>
+
+  `;
+
+  let chips = `
+
+    <span class="chip good">
+      ✓ Encontrado na consulta atual
+    </span>
+
+  `;
+
+  if (!business.website) {
+
+    chips += `
+
+      <span class="chip warn">
+        Sem site cadastrado
+      </span>
+
+    `;
+
+  }
+
+  if (business.instagram) {
+
+    chips += `
+
+      <span class="chip">
+        Instagram encontrado
+      </span>
+
+    `;
+
+  }
+
+  let opportunity = "";
+
+  if (!business.website || !business.instagram) {
+
+    const reasons = [];
+
+    if (!business.website) {
+      reasons.push("não possui site cadastrado");
+    }
+
+    if (!business.instagram) {
+      reasons.push(
+        "Instagram não cadastrado na base"
+      );
+    }
+
+    opportunity = `
+
+      <div class="opportunity">
+
+        🎨 <strong>Sinal de prospecção:</strong>
+
+        ${reasons.join(" e ")}.
+
+        Isso é apenas um sinal para você analisar,
+        não uma avaliação definitiva do negócio.
+
+      </div>
+
+    `;
+
+  }
+
+  return `
+
+    <article class="card">
+
+      <h3>
+        ${escapeHTML(business.name)}
+      </h3>
+
+      <div class="chips">
+        ${chips}
+      </div>
+
+      <div class="meta">
+
+        📍 ${business.distance.toFixed(1)} km
+
+        <br>
+
+        ${
+          business.address
+            ? "🏠 " +
+              escapeHTML(business.address) +
+              "<br>"
+            : ""
+        }
+
+        ${
+          business.phone
+            ? "📞 " +
+              escapeHTML(business.phone)
+            : "📞 Telefone não cadastrado"
+        }
+
+      </div>
+
+      <div class="links">
+
+        ${phoneActions}
+
+        ${whatsappActions}
+
+        ${instagramActions}
+
+        ${websiteActions}
+
+        ${mapActions}
+
+      </div>
+
+      ${opportunity}
+
+      <div class="fresh">
+
+        Base consultada:
+        ${escapeHTML(business.time)}
+
+      </div>
+
+    </article>
+
+  `;
+
 }
-document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-copy]');
-  if(b)navigator.clipboard?.writeText(b.dataset.copy).then(()=>{const old=b.textContent;b.textContent='✓ Copiado';setTimeout(()=>b.textContent=old,1200)});
-  const f=e.target.closest('.filter');
-  if(f){document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));f.classList.add('active');currentFilter=f.dataset.filter;render()}
-});
-async function search(){
-  const place=$('location').value.trim(), c=$('category').value, r=+$('radius').value;
-  if(!place)return status('Digite uma cidade/região ou use sua localização.',true);
-  $('searchBtn').disabled=true;$('searchBtn').textContent='⏳ Pesquisando...';$('results').innerHTML='';
-  try{
-    status('Consultando dados atuais do OpenStreetMap/Overpass...');
-    const center=await geocode(place), data=await overpass(query(center.lat,center.lon,r,c));
-    const baseTime=data.osm3s?.timestamp||'base sem horário informado';
-    allResults=data.elements.map(e=>{
-      const t=e.tags||{}, p=coords(e);
-      const website=t.website||t['contact:website']||'';
-      const instagram=normalizeInstagram(t.instagram||t['contact:instagram']||t['contact:instagram:url']||'');
-      const x={name:t.name||'Sem nome',website,instagram,phone:t.phone||t['contact:phone']||'',address:[t['addr:street'],t['addr:housenumber'],t['addr:suburb']].filter(Boolean).join(', '),distance:dist(center,p),lat:p.lat,lon:p.lon,updated:baseTime,edited:e.timestamp||'',designSignals:[]};
-      x.designSignals=opportunity(x);
-      return x;
-    }).filter(x=>x.name!=='Sem nome').sort((a,b)=>a.distance-b.distance);
-    $('summary').classList.remove('hidden');$('filters').classList.remove('hidden');currentFilter='all';
-    document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x.dataset.filter==='all'));
-    render();
-    status(`Busca concluída. ${allResults.length} estabelecimentos foram retornados pela base consultada. A base do Overpass informa ${baseTime}.`);
-  }catch(e){status(e.message||'Erro na pesquisa.',true)}
-  finally{$('searchBtn').disabled=false;$('searchBtn').textContent='🔍 Encontrar oportunidades'}
+
+document.addEventListener(
+  "click",
+  event => {
+
+    const button =
+      event.target.closest("[data-copy]");
+
+    if (!button) return;
+
+    if (!navigator.clipboard) return;
+
+    navigator.clipboard.writeText(
+      button.dataset.copy
+    );
+
+    const original =
+      button.textContent;
+
+    button.textContent =
+      "✓ Copiado";
+
+    setTimeout(() => {
+
+      button.textContent =
+        original;
+
+    }, 1200);
+
+  }
+);
+
+async function searchBusinesses() {
+
+  const location =
+    $("location").value.trim();
+
+  if (!location) {
+
+    showStatus(
+      "Digite uma cidade/região ou use sua localização.",
+      true
+    );
+
+    return;
+
+  }
+
+  const searchButton =
+    $("search");
+
+  searchButton.disabled =
+    true;
+
+  searchButton.textContent =
+    "⏳ Pesquisando...";
+
+  $("results").innerHTML = "";
+
+  try {
+
+    showStatus(
+      "1/2 — Localizando a região..."
+    );
+
+    const center =
+      await geocode(location);
+
+    showStatus(
+      "2/2 — Consultando servidores de mapas..."
+    );
+
+    const radius =
+      Number($("radius").value);
+
+    const category =
+      $("category").value;
+
+    const query =
+      buildQuery(
+        center,
+        radius,
+        category
+      );
+
+    const data =
+      await queryOverpass(query);
+
+    const timestamp =
+      data.osm3s?.timestamp ||
+      "não informado";
+
+    const businesses =
+      data.elements
+        .map(element => {
+
+          const tags =
+            element.tags || {};
+
+          const point = {
+
+            lat:
+              Number(
+                element.lat ??
+                element.center?.lat
+              ),
+
+            lon:
+              Number(
+                element.lon ??
+                element.center?.lon
+              )
+
+          };
+
+          const whatsapp =
+            tags["contact:whatsapp"] ||
+            tags.whatsapp ||
+            "";
+
+          const instagram =
+            tags.instagram ||
+            tags["contact:instagram"] ||
+            "";
+
+          const website =
+            tags.website ||
+            tags["contact:website"] ||
+            "";
+
+          const phone =
+            tags.phone ||
+            tags["contact:phone"] ||
+            "";
+
+          return {
+
+            name:
+              tags.name || "",
+
+            phone,
+
+            whatsapp:
+              formatWhatsApp(whatsapp),
+
+            instagram:
+              formatInstagram(instagram),
+
+            website,
+
+            address:
+              [
+                tags["addr:street"],
+                tags["addr:housenumber"],
+                tags["addr:suburb"]
+              ]
+                .filter(Boolean)
+                .join(", "),
+
+            distance:
+              calculateDistance(
+                center,
+                point
+              ),
+
+            lat:
+              point.lat,
+
+            lon:
+              point.lon,
+
+            time:
+              timestamp
+
+          };
+
+        })
+
+        .filter(
+          business =>
+            business.name &&
+            Number.isFinite(business.lat) &&
+            Number.isFinite(business.lon)
+        )
+
+        .sort(
+          (a, b) =>
+            a.distance - b.distance
+        );
+
+    $("count").textContent =
+      businesses.length;
+
+    $("siteOpp").textContent =
+      businesses.filter(
+        business => !business.website
+      ).length;
+
+    $("opp").textContent =
+      businesses.filter(
+        business =>
+          !business.website ||
+          !business.instagram
+      ).length;
+
+    if (!businesses.length) {
+
+      $("results").innerHTML = `
+
+        <div class="empty">
+
+          Nenhum estabelecimento encontrado
+          nessa pesquisa.
+
+        </div>
+
+      `;
+
+    } else {
+
+      $("results").innerHTML =
+        businesses
+          .map(renderBusiness)
+          .join("");
+
+    }
+
+    showStatus(
+      `Pronto: ${businesses.length} negócios encontrados.`
+    );
+
+  } catch (error) {
+
+    showStatus(
+      error.message ||
+      "Ocorreu um erro durante a pesquisa.",
+      true
+    );
+
+  } finally {
+
+    searchButton.disabled =
+      false;
+
+    searchButton.textContent =
+      "🔍 Pesquisar";
+
+  }
+
 }
-$('searchBtn').onclick=search;
-$('locateBtn').onclick=()=>{
-  if(!navigator.geolocation)return status('Geolocalização não disponível.',true);
-  status('Solicitando sua localização...');
-  navigator.geolocation.getCurrentPosition(async p=>{
-    try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.coords.latitude}&lon=${p.coords.longitude}`);const d=await r.json();$('location').value=d.display_name||`${p.coords.latitude}, ${p.coords.longitude}`;status('Localização preenchida. Agora pesquise.')}catch(e){status('Localização obtida, mas não consegui converter para endereço.',true)}
-  },()=>status('Permissão de localização negada. Digite a cidade manualmente.',true));
-};
+
+$("search").addEventListener(
+  "click",
+  searchBusinesses
+);
+
+$("locate").addEventListener(
+  "click",
+  () => {
+
+    if (!navigator.geolocation) {
+
+      showStatus(
+        "Seu navegador não permite localização. Digite a cidade manualmente.",
+        true
+      );
+
+      return;
+
+    }
+
+    showStatus(
+      "Obtendo sua localização..."
+    );
+
+    navigator.geolocation.getCurrentPosition(
+
+      async position => {
+
+        try {
+
+          const response =
+            await fetch(
+              "https://nominatim.openstreetmap.org/reverse?" +
+              new URLSearchParams({
+                format: "jsonv2",
+                lat: position.coords.latitude,
+                lon: position.coords.longitude
+              })
+            );
+
+          const data =
+            await response.json();
+
+          $("location").value =
+            data.display_name ||
+            `${position.coords.latitude}, ${position.coords.longitude}`;
+
+          showStatus(
+            "Localização preenchida. Agora toque em Pesquisar."
+          );
+
+        } catch (error) {
+
+          showStatus(
+            "Não foi possível obter o endereço.",
+            true
+          );
+
+        }
+
+      },
+
+      () => {
+
+        showStatus(
+          "Não foi possível usar sua localização. Digite a cidade manualmente.",
+          true
+        );
+
+      }
+
+    );
+
+  }
+);
