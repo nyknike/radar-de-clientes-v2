@@ -1,26 +1,33 @@
-RADAR DE CLIENTES V8
-====================
+RADAR DE CLIENTES V9
+=====================
 
-V8 mantém o Radar V7 e transforma a criação de sites em um fluxo mais simples e visual.
+V9 mantém a base funcional da V8 e adiciona:
 
-NOVO NO V8
-- Interface do criador organizada em: Informações > Conteúdo > Visual > Prévia.
-- Estilos: Automático, Premium, Moderno, Urbano, Minimalista e Vibrante.
-- Composições diferentes de hero: imagem + texto, cinematográfico, centralizado e editorial.
-- Imagens de referência automáticas por tipo de negócio para deixar a primeira versão visual mais rica.
-- Cards de produtos/serviços com imagens, galeria em composição visual e blocos promocionais.
-- Cores, fontes, tema, botões, ritmo, imagem principal e seções continuam editáveis.
-- Radar continua com localização, busca, filtros, análise de presença digital, contatos e criação de plataforma.
-- ADM, prévia, publicação, link, download HTML, Minhas plataformas e migração do V7 continuam.
-- Layout responsivo para celular e computador.
+1. ADM como primeira tela após criar uma plataforma.
+2. Link do site público sempre visível no topo do ADM, com abrir/copiar.
+3. Site público continua separado: ?site= não mostra controles administrativos.
+4. Motor de variedade visual com 6 composições/identidades e botão “Gerar outra versão”.
+5. Nome real do negócio usado como wordmark/identidade tipográfica.
+6. Conteúdo sugerido por tipo de negócio, marcado como SUGESTÃO e editável no ADM.
+7. Imagens iniciais escolhidas por categoria/uso, substituindo o banco genérico único da V8.
+8. Preparador de URL para geração de imagem por IA (Pollinations). A API pode exigir autenticação conforme o plano; o app não embute chave secreta.
+9. Designer simplificado: automático por padrão e personalização avançada escondida.
+10. Migração V8 -> V9 e preservação de plataformas salvas.
 
-ORGANIZAÇÃO
-1. Informações: dados do estabelecimento e nível.
-2. Conteúdo: produtos/serviços, preços, imagens e avaliações.
-3. Visual: estilo, composição, cores, fontes e seções.
-4. Prévia: celular ou computador.
+IMPORTANTE SOBRE CONTEÚDO AUTOMÁTICO
+-------------------------------------
+Itens, preços, descrições e imagens sugeridos pelo sistema NÃO são fatos confirmados do estabelecimento.
+Revise tudo no ADM antes de publicar.
 
-OBSERVAÇÃO
-O gerador continua sendo 100% client-side. Não há backend, login real ou banco de dados.
-As imagens automáticas são referências externas e podem ser trocadas pelo cliente.
-O nível Completo continua sendo uma página avançada com navegação interna, não um conjunto físico de vários arquivos.
+IMPORTANTE SOBRE IMAGENS IA
+----------------------------
+O V9 deixa o sistema preparado para uma API de geração de imagens. O Nano Banana/Gemini possui API oficial para geração de imagens, mas uma integração direta em um site estático exigiria uma camada segura de servidor e uma credencial própria. Por segurança, esta versão não grava chaves secretas no código.
+
+PUBLICAÇÃO
+----------
+O site publicado continua sendo um HTML gerado a partir dos dados da plataforma e compartilhado por ?site=.
+Imagens enviadas como data URL podem ser removidas do link compartilhado por tamanho; “Baixar HTML” preserva as imagens locais.
+
+EXECUÇÃO
+--------
+Abra index.html ou publique os arquivos em um host estático.
