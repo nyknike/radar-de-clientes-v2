@@ -6,3 +6,6 @@
 .frame-wrap{display:flex;justify-content:center;background:#0a121d;padding:10px;border-radius:12px}.frame-wrap iframe{border:0;background:#fff;height:68vh;border-radius:10px;max-width:100%}
 .plat-actions button,.plat-actions a{font-size:13px}.linkbox{font-size:12px;color:#8fa0b8;word-break:break-all}
 @media(max-width:760px){.row{grid-template-columns:1fr 1fr}}
+
+/* ===== V7: níveis de site ===== */
+.level-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 18px}.level-card{position:relative;display:grid;gap:5px;padding:14px;background:#0c141f;border:1px solid #35465e;border-radius:14px;cursor:pointer;color:#dbe5f3}.level-card input{position:absolute;opacity:0;width:1px;height:1px}.level-card.selected{border-color:#7283ff;box-shadow:0 0 0 2px rgba(114,131,255,.18)}.level-card strong{font-size:17px;color:#fff}.level-card span{font-size:13px;color:#aab7c9}.level-card small{color:#7f91aa}@media(max-width:760px){.level-grid{grid-template-columns:1fr}}

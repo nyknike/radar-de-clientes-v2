@@ -1,19 +1,39 @@
-# Radar de Clientes V6 (evolução da V5)
-Abra index.html (de preferência via https ou localhost, necessário para "Usar minha localização").
+RADAR DE CLIENTES — V7
 
-Fluxo: Radar > estabelecimento > análise > Criar plataforma > preenchimento automático > Designer > ADM > Prévia > Publicação > Link
+V7 construída sobre a V6 funcional, preservando Radar, localização, filtros, análise de oportunidade, criação automática, ADM, prévia e publicação.
 
-Novidades
-- Radar: 5 servidores Overpass em fallback escalonado (o primeiro que responder vence, limite de 32s); geocodificação Nominatim + Photon; aceita cidade, bairro, endereço ou "lat, lon"; localização com 2 tentativas.
-- Filtro: exige nome, telefone, WhatsApp ou Instagram e dados com até 5 anos (data de edição/verificação do OpenStreetMap). Mostra selo de atualização.
-- Análise de design em cada card (nível de oportunidade + sugestões). O radar NÃO lê imagens do Instagram/site: o julgamento visual é feito abrindo os links.
-- "Criar plataforma" abre o editor já preenchido (nome, tipo, telefone, WhatsApp, Instagram, endereço, descrição, título). Tudo editável.
-- Conteúdo por tipo: restaurante, pizzaria, barbearia, salão, loja, mercado e genérico. Os itens/preços de "Preencher automaticamente" são EXEMPLOS: edite antes de publicar.
-- Designer: modelos por tipo, cores, fonte, botões, banner, galeria, ordem das seções, avaliações, prévia celular/computador.
-- ADM por plataforma (botão ADM ou "Link do ADM"), sem voltar ao Radar.
-- Minhas plataformas: ADM, Editar, Prévia, Publicar/Copiar link, Baixar HTML.
-- Logo: marca d'água de 20px no canto, discreta.
+NOVO: 3 níveis de construção de sites
+1. Essencial — site simples e rápido, dados, contato, conteúdo principal e responsividade.
+2. Profissional — banner, galeria, avaliações, localização, mais personalização e melhor apresentação visual.
+3. Completo — navegação avançada, várias áreas/seções, FAQ, equipe, ofertas, localização, SEO básico, Open Graph e layout mais amplo.
 
-Limites
-- Sem servidor: os dados ficam no navegador (localStorage) e o link publicado leva os dados dentro da URL. Imagens enviadas do computador não cabem no link (use URLs de imagem) - mas entram no "Baixar HTML", que gera uma página completa para hospedar em qualquer lugar.
-- Dados migram automaticamente da V5 (chave radarPlatformsV5).
+O nível é escolhido dentro de Criar plataforma e pode ser alterado depois. O tipo do estabelecimento continua adaptando automaticamente o conteúdo.
+
+Designer V7
+- presets por tipo;
+- cores, fontes, botões e tema;
+- banner e galeria;
+- ordem/ativação de seções;
+- prévia celular/computador;
+- conteúdo automático ou manual.
+
+ADM V7
+- edição de dados;
+- cardápio/produtos/serviços;
+- preços, descrições e imagens;
+- seções;
+- design;
+- prévia;
+- publicação e link do ADM.
+
+PUBLICAÇÃO
+O site continua sendo gerado como um documento HTML autocontido para manter a publicação sem backend nesta etapa. O nível Completo usa navegação interna e seções avançadas no mesmo documento; a separação física em vários arquivos/páginas e hospedagem própria pode ser adicionada em uma etapa futura sem quebrar a V7.
+
+LOGO
+A logo da plataforma permanece como assinatura discreta de 20 px no canto.
+
+MIGRAÇÃO
+A V7 lê plataformas da V6/V5 e normaliza os campos para o novo modelo.
+
+TESTES
+A sintaxe do app.js foi validada com Node.js após a atualização. A busca real de estabelecimentos e o visual devem ser testados no navegador/Render.
