@@ -1,39 +1,26 @@
-RADAR DE CLIENTES — V7
+RADAR DE CLIENTES V8
+====================
 
-V7 construída sobre a V6 funcional, preservando Radar, localização, filtros, análise de oportunidade, criação automática, ADM, prévia e publicação.
+V8 mantém o Radar V7 e transforma a criação de sites em um fluxo mais simples e visual.
 
-NOVO: 3 níveis de construção de sites
-1. Essencial — site simples e rápido, dados, contato, conteúdo principal e responsividade.
-2. Profissional — banner, galeria, avaliações, localização, mais personalização e melhor apresentação visual.
-3. Completo — navegação avançada, várias áreas/seções, FAQ, equipe, ofertas, localização, SEO básico, Open Graph e layout mais amplo.
+NOVO NO V8
+- Interface do criador organizada em: Informações > Conteúdo > Visual > Prévia.
+- Estilos: Automático, Premium, Moderno, Urbano, Minimalista e Vibrante.
+- Composições diferentes de hero: imagem + texto, cinematográfico, centralizado e editorial.
+- Imagens de referência automáticas por tipo de negócio para deixar a primeira versão visual mais rica.
+- Cards de produtos/serviços com imagens, galeria em composição visual e blocos promocionais.
+- Cores, fontes, tema, botões, ritmo, imagem principal e seções continuam editáveis.
+- Radar continua com localização, busca, filtros, análise de presença digital, contatos e criação de plataforma.
+- ADM, prévia, publicação, link, download HTML, Minhas plataformas e migração do V7 continuam.
+- Layout responsivo para celular e computador.
 
-O nível é escolhido dentro de Criar plataforma e pode ser alterado depois. O tipo do estabelecimento continua adaptando automaticamente o conteúdo.
+ORGANIZAÇÃO
+1. Informações: dados do estabelecimento e nível.
+2. Conteúdo: produtos/serviços, preços, imagens e avaliações.
+3. Visual: estilo, composição, cores, fontes e seções.
+4. Prévia: celular ou computador.
 
-Designer V7
-- presets por tipo;
-- cores, fontes, botões e tema;
-- banner e galeria;
-- ordem/ativação de seções;
-- prévia celular/computador;
-- conteúdo automático ou manual.
-
-ADM V7
-- edição de dados;
-- cardápio/produtos/serviços;
-- preços, descrições e imagens;
-- seções;
-- design;
-- prévia;
-- publicação e link do ADM.
-
-PUBLICAÇÃO
-O site continua sendo gerado como um documento HTML autocontido para manter a publicação sem backend nesta etapa. O nível Completo usa navegação interna e seções avançadas no mesmo documento; a separação física em vários arquivos/páginas e hospedagem própria pode ser adicionada em uma etapa futura sem quebrar a V7.
-
-LOGO
-A logo da plataforma permanece como assinatura discreta de 20 px no canto.
-
-MIGRAÇÃO
-A V7 lê plataformas da V6/V5 e normaliza os campos para o novo modelo.
-
-TESTES
-A sintaxe do app.js foi validada com Node.js após a atualização. A busca real de estabelecimentos e o visual devem ser testados no navegador/Render.
+OBSERVAÇÃO
+O gerador continua sendo 100% client-side. Não há backend, login real ou banco de dados.
+As imagens automáticas são referências externas e podem ser trocadas pelo cliente.
+O nível Completo continua sendo uma página avançada com navegação interna, não um conjunto físico de vários arquivos.
