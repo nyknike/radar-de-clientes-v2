@@ -1,40 +1,22 @@
-RADAR DE CLIENTES — V10 FINAL
-=============================
+RADAR DE CLIENTES — V11
 
-Base: V9 preservada. O painel Radar, busca, resultados, níveis, ADM,
-salvamento, publicação, prévia e links continuam com o conceito original.
+V11 mantém o Radar de Clientes e adiciona um motor modular por tipo de negócio.
 
-CORREÇÃO PRINCIPAL DA V10
-- O mesmo endereço/imagem não é reutilizado automaticamente em todas as seções.
-- O gerador monta um conjunto de imagens diferentes por negócio.
-- Hero, galeria e itens recebem imagens distintas quando há opções suficientes.
-- Se não houver imagens suficientes, o sistema prefere deixar o espaço sem foto
-  a repetir a mesma imagem várias vezes.
-- O botão “🖼️ Variar imagens” permite reorganizar as imagens.
-- “🔄 Gerar outra versão” muda a composição e também pode mudar o conjunto de imagens.
+NOVO
+- Funções específicas por negócio: restaurante, pizzaria, barbearia, salão, pet shop, loja, academia, clínica, hotel, oficina e outros.
+- ADM com aba “Funções” para ativar/desativar módulos.
+- Restaurantes/pizzarias/lanchonetes: cardápio ampliado, pedidos, entrega/retirada e solicitação de reserva.
+- Barbearias/salões/pet shops/oficinas: serviços + profissionais + solicitação de agendamento.
+- Academias: planos, aulas/horários, equipe e interesse em aula experimental.
+- Clínicas: especialidades, equipe e solicitação de atendimento.
+- Hotéis: acomodações e solicitação de reserva.
+- Oficinas: orçamento e agendamento.
+- Pedidos/agendamentos/reservas montam mensagens automaticamente e abrem o WhatsApp.
+- Conteúdo gerado automaticamente continua marcado como sugestão para revisão.
+- Imagens continuam sendo distribuídas por função sem repetir a mesma foto quando há alternativas.
 
-RELEVÂNCIA
-- Foram ampliados os bancos por categoria.
-- Pet Shop / Agro Pet ganhou categoria própria, conteúdo e imagens específicas.
-- Nomes como “Agro Pet” ajudam a inferir a categoria pet mesmo quando o mapa
-  devolve “Loja”.
-- As sugestões de produtos/serviços continuam marcadas no ADM e precisam ser conferidas.
-
-VARIEDADE VISUAL
-- A estrutura visual da V9 foi preservada.
-- As variantes de composição, tipografia, ritmo, tema e botões continuam.
-- A V10 não substitui o Radar por um painel novo/genérico.
-
-IMAGENS EXTERNAS
-- O V9 já tinha preparação para geração de imagem por URL e imagens de estoque.
-- A V10 melhora a distribuição das imagens antes de adicionar novas dependências.
-- O recurso de IA existente continua opcional.
-
-MIGRAÇÃO
-- V10 lê plataformas salvas na chave V9 e migra para a chave V10.
-- Na migração, imagens repetidas são reparadas quando há alternativas no banco.
-
-OBSERVAÇÃO
-Imagens externas dependem da disponibilidade dos respectivos provedores/URLs.
-Para produção, uma API de imagens (por exemplo Pexels) pode substituir ou complementar
-os bancos de fallback sem mudar o restante do gerador.
+IMPORTANTE
+- A V11 ainda é uma plataforma estática/local: não possui banco de dados, login real nem bloqueio de horários em tempo real.
+- O agendamento atual envia uma solicitação pelo WhatsApp; confirmação e disponibilidade real ficam com o estabelecimento.
+- Para calendário, horários ocupados, reservas confirmadas, pedidos com status e painel multiusuário será necessário um backend.
+- O Radar não deve inventar preços, horários, profissionais ou serviços reais: dados sugeridos precisam ser confirmados pelo cliente.
