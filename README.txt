@@ -1,42 +1,40 @@
-RADAR DE CLIENTES — V10
-===========================
+RADAR DE CLIENTES — V10 FINAL
+=============================
 
-V10 muda o motor visual: agora existem 10 estruturas realmente diferentes,
-em vez de apenas trocar cores/fontes de um template.
+Base: V9 preservada. O painel Radar, busca, resultados, níveis, ADM,
+salvamento, publicação, prévia e links continuam com o conceito original.
 
-DESIGNS:
-1 Hero Impacto
-2 Editorial
-3 Bento
-4 Catálogo
-5 Premium
-6 Bold
-7 Natural
-8 Serviços
-9 Menu
-10 Local Business
+CORREÇÃO PRINCIPAL DA V10
+- O mesmo endereço/imagem não é reutilizado automaticamente em todas as seções.
+- O gerador monta um conjunto de imagens diferentes por negócio.
+- Hero, galeria e itens recebem imagens distintas quando há opções suficientes.
+- Se não houver imagens suficientes, o sistema prefere deixar o espaço sem foto
+  a repetir a mesma imagem várias vezes.
+- O botão “🖼️ Variar imagens” permite reorganizar as imagens.
+- “🔄 Gerar outra versão” muda a composição e também pode mudar o conjunto de imagens.
 
-O tipo de negócio influencia a escolha do design. "Gerar outra aparência"
-troca a estrutura e a ordem/uso das imagens sem apagar os dados da plataforma.
+RELEVÂNCIA
+- Foram ampliados os bancos por categoria.
+- Pet Shop / Agro Pet ganhou categoria própria, conteúdo e imagens específicas.
+- Nomes como “Agro Pet” ajudam a inferir a categoria pet mesmo quando o mapa
+  devolve “Loja”.
+- As sugestões de produtos/serviços continuam marcadas no ADM e precisam ser conferidas.
 
-IMAGENS:
-- O V10 já tem fallback por categoria.
-- A integração opcional com Pexels está preparada no app.js.
-- Configure uma chave em localStorage com:
-  localStorage.setItem("pexelsApiKey","SUA_CHAVE")
-  (apenas para teste local; para produção, mova a chave para backend/Render).
-- A busca usa termos específicos da categoria e orientação landscape.
+VARIEDADE VISUAL
+- A estrutura visual da V9 foi preservada.
+- As variantes de composição, tipografia, ritmo, tema e botões continuam.
+- A V10 não substitui o Radar por um painel novo/genérico.
 
-CONTEÚDO:
-- Produtos/serviços iniciais são sugestões e aparecem marcados no ADM.
-- O usuário deve revisar antes de publicar.
-- O site público não mostra a marca "Sugestão".
+IMAGENS EXTERNAS
+- O V9 já tinha preparação para geração de imagem por URL e imagens de estoque.
+- A V10 melhora a distribuição das imagens antes de adicionar novas dependências.
+- O recurso de IA existente continua opcional.
 
-ADM:
-- O ADM abre primeiro depois da criação.
-- Link do site público fica no topo.
-- "Gerar outra aparência" preserva os dados.
-- "Buscar novas imagens" usa Pexels quando a chave estiver configurada.
+MIGRAÇÃO
+- V10 lê plataformas salvas na chave V9 e migra para a chave V10.
+- Na migração, imagens repetidas são reparadas quando há alternativas no banco.
 
-OBS:
-Esta V10 é uma evolução do motor visual e não depende de IA paga para funcionar.
+OBSERVAÇÃO
+Imagens externas dependem da disponibilidade dos respectivos provedores/URLs.
+Para produção, uma API de imagens (por exemplo Pexels) pode substituir ou complementar
+os bancos de fallback sem mudar o restante do gerador.
