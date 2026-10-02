@@ -1,33 +1,42 @@
-RADAR DE CLIENTES V9
-=====================
+RADAR DE CLIENTES — V10
+===========================
 
-V9 mantém a base funcional da V8 e adiciona:
+V10 muda o motor visual: agora existem 10 estruturas realmente diferentes,
+em vez de apenas trocar cores/fontes de um template.
 
-1. ADM como primeira tela após criar uma plataforma.
-2. Link do site público sempre visível no topo do ADM, com abrir/copiar.
-3. Site público continua separado: ?site= não mostra controles administrativos.
-4. Motor de variedade visual com 6 composições/identidades e botão “Gerar outra versão”.
-5. Nome real do negócio usado como wordmark/identidade tipográfica.
-6. Conteúdo sugerido por tipo de negócio, marcado como SUGESTÃO e editável no ADM.
-7. Imagens iniciais escolhidas por categoria/uso, substituindo o banco genérico único da V8.
-8. Preparador de URL para geração de imagem por IA (Pollinations). A API pode exigir autenticação conforme o plano; o app não embute chave secreta.
-9. Designer simplificado: automático por padrão e personalização avançada escondida.
-10. Migração V8 -> V9 e preservação de plataformas salvas.
+DESIGNS:
+1 Hero Impacto
+2 Editorial
+3 Bento
+4 Catálogo
+5 Premium
+6 Bold
+7 Natural
+8 Serviços
+9 Menu
+10 Local Business
 
-IMPORTANTE SOBRE CONTEÚDO AUTOMÁTICO
--------------------------------------
-Itens, preços, descrições e imagens sugeridos pelo sistema NÃO são fatos confirmados do estabelecimento.
-Revise tudo no ADM antes de publicar.
+O tipo de negócio influencia a escolha do design. "Gerar outra aparência"
+troca a estrutura e a ordem/uso das imagens sem apagar os dados da plataforma.
 
-IMPORTANTE SOBRE IMAGENS IA
-----------------------------
-O V9 deixa o sistema preparado para uma API de geração de imagens. O Nano Banana/Gemini possui API oficial para geração de imagens, mas uma integração direta em um site estático exigiria uma camada segura de servidor e uma credencial própria. Por segurança, esta versão não grava chaves secretas no código.
+IMAGENS:
+- O V10 já tem fallback por categoria.
+- A integração opcional com Pexels está preparada no app.js.
+- Configure uma chave em localStorage com:
+  localStorage.setItem("pexelsApiKey","SUA_CHAVE")
+  (apenas para teste local; para produção, mova a chave para backend/Render).
+- A busca usa termos específicos da categoria e orientação landscape.
 
-PUBLICAÇÃO
-----------
-O site publicado continua sendo um HTML gerado a partir dos dados da plataforma e compartilhado por ?site=.
-Imagens enviadas como data URL podem ser removidas do link compartilhado por tamanho; “Baixar HTML” preserva as imagens locais.
+CONTEÚDO:
+- Produtos/serviços iniciais são sugestões e aparecem marcados no ADM.
+- O usuário deve revisar antes de publicar.
+- O site público não mostra a marca "Sugestão".
 
-EXECUÇÃO
---------
-Abra index.html ou publique os arquivos em um host estático.
+ADM:
+- O ADM abre primeiro depois da criação.
+- Link do site público fica no topo.
+- "Gerar outra aparência" preserva os dados.
+- "Buscar novas imagens" usa Pexels quando a chave estiver configurada.
+
+OBS:
+Esta V10 é uma evolução do motor visual e não depende de IA paga para funcionar.

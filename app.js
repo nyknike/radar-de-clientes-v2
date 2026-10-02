@@ -1,194 +1,209 @@
-const $=id=>document.getElementById(id);
-const SERVERS=["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.openstreetmap.fr/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
-const KEY="radarPlatformsV9",OLD_KEY="radarPlatformsV8";
-let results=[],filter="all",here=null,ed=null,edMode="create",tab="dados",dev="mobile",previewId=null,logoURL="logo.png";
-let platforms=[];
-const LEVELS={essential:{name:"Essencial",desc:"Site simples, rápido e objetivo.",pages:1},professional:{name:"Profissional",desc:"Site visual completo com imagens e seções avançadas.",pages:1},complete:{name:"Completo",desc:"Experiência completa com navegação e páginas/seções avançadas.",pages:7}};
-const labels={restaurant:"Restaurante",pizza:"Pizzaria",fast_food:"Lanchonete",shop:"Loja",market:"Mercado / Conveniência",barber:"Barbearia",salon:"Salão / Beleza",cafe:"Café",gym:"Academia",clinic:"Clínica",hotel:"Hotel",car_repair:"Oficina",bakery:"Padaria",other:"Estabelecimento"};
-const tplKey=t=>({restaurant:"restaurant",fast_food:"restaurant",cafe:"restaurant",bakery:"restaurant",pizza:"pizza",barber:"barber",salon:"salon",shop:"shop",market:"market"})[t]||"generic";
-/* ---------- Conteúdo automático por tipo (itens de exemplo, editáveis) ---------- */
-const TPL={
-restaurant:{kind:"Cardápio",about:n=>`${n} serve pratos preparados com ingredientes frescos e muito sabor. Venha nos visitar ou peça pelo WhatsApp.`,items:[["Pratos","Prato do dia","32,00","Acompanha arroz, feijão e salada"],["Pratos","Executivo","28,00",""],["Bebidas","Refrigerante lata","6,00",""],["Sobremesas","Sobremesa da casa","14,00",""]]},
-pizza:{kind:"Cardápio",about:n=>`${n}: pizzas artesanais, massa leve e ingredientes selecionados. Peça pelo WhatsApp!`,items:[["Pizzas","Calabresa","45,00","Molho, mussarela, calabresa e cebola"],["Pizzas","Mussarela","42,00","Molho, mussarela e orégano"],["Pizzas","Portuguesa","49,00",""],["Bebidas","Refrigerante 2L","12,00",""]]},
-barber:{kind:"Serviços",about:n=>`${n}: cortes modernos, barba e atendimento com hora marcada. Agende pelo WhatsApp.`,items:[["Serviços","Corte masculino","40,00","Máquina ou tesoura"],["Serviços","Barba","30,00","Toalha quente e navalha"],["Serviços","Corte + barba","65,00",""]]},
-salon:{kind:"Serviços",about:n=>`${n} cuida da sua beleza com profissionais experientes. Veja os serviços e agende.`,items:[["Cabelo","Corte feminino","70,00",""],["Cabelo","Escova","50,00",""],["Unhas","Manicure","35,00",""]]},
-shop:{kind:"Produtos",about:n=>`Conheça os produtos da ${n}. Novidades toda semana e atendimento pelo WhatsApp.`,items:[["Novidades","Produto destaque","59,90","Descreva o produto"],["Promoções","Produto em oferta","39,90",""]]},
-market:{kind:"Produtos e ofertas",about:n=>`${n}: praticidade e bons preços perto de você. Confira as ofertas.`,items:[["Ofertas","Oferta da semana","9,99","Válida enquanto durar o estoque"],["Mercearia","Arroz 5kg","28,90",""],["Bebidas","Refrigerante 2L","8,99",""]]},
-generic:{kind:"Serviços / produtos",about:n=>`Conheça ${n}. Fale com a gente pelo WhatsApp e saiba mais.`,items:[["Serviços","Serviço principal","0,00","Descreva o serviço"]]}};
-const PRESETS=[
-{id:"rest1",name:"Sabor Quente",for:["restaurant"],c1:"#c0392b",c2:"#3b1f14",font:"Georgia",dark:false},
-{id:"piz1",name:"Forno à Lenha",for:["pizza"],c1:"#e31b23",c2:"#1a1a1a",font:"Trebuchet MS",dark:true},
-{id:"barb1",name:"Navalha Dark",for:["barber"],c1:"#c9a24a",c2:"#111111",font:"Impact",dark:true},
-{id:"sal1",name:"Beleza Rosé",for:["salon"],c1:"#c2587a",c2:"#4a1f33",font:"Georgia",dark:false},
-{id:"shop1",name:"Vitrine Clean",for:["shop"],c1:"#2563eb",c2:"#0f172a",font:"Verdana",dark:false},
-{id:"mkt1",name:"Feira Fresca",for:["market"],c1:"#16a34a",c2:"#14532d",font:"Verdana",dark:false},
-{id:"gen1",name:"Essencial",for:["generic"],c1:"#5d70ff",c2:"#182336",font:"system-ui",dark:false},
-{id:"gen2",name:"Noite",for:["generic"],c1:"#22d3ee",c2:"#0b1220",font:"system-ui",dark:true}];
-const VISUAL_STYLES={auto:{name:"Automático",desc:"O Radar escolhe a composição."},premium:{name:"Premium",desc:"Elegante e sofisticado."},modern:{name:"Moderno",desc:"Limpo, forte e atual."},urban:{name:"Urbano",desc:"Ousado e editorial."},minimal:{name:"Minimalista",desc:"Espaço e simplicidade."},vibrant:{name:"Vibrante",desc:"Cores fortes e energia."}};
-const LAYOUTS={heroSplit:"Imagem + texto",heroFull:"Hero cinematográfico",heroCentered:"Hero centralizado",editorial:"Editorial"};
-const IMAGE_BANK={restaurant:["https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1200&q=85","https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=85"],pizza:["https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=1200&q=85"],barber:["https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1200&q=85","https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=900&q=85"],salon:["https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=85"],shop:["https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1200&q=85"],market:["https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1200&q=85"],generic:["https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1200&q=85"]};
-const FONTS=["system-ui","Georgia","Verdana","Trebuchet MS","Impact","Courier New"];
-const SECTIONS={about:"Sobre",items:"Cardápio / Serviços / Produtos",gallery:"Galeria",reviews:"Avaliações",contact:"Contato",faq:"FAQ",team:"Equipe",offers:"Destaques / Ofertas",location:"Localização"};
-/* ---------- V9: variedade visual + imagens relevantes ---------- */
-const V9_VARIANTS=[
- {id:"atelier",label:"Ateliê",font:"Georgia",shape:"round",hero:"editorial",density:"comfortable",dark:false},
- {id:"bold",label:"Bold",font:"Impact",shape:"square",hero:"heroFull",density:"compact",dark:true},
- {id:"luxe",label:"Luxe",font:"Trebuchet MS",shape:"pill",hero:"heroCentered",density:"comfortable",dark:true},
- {id:"clean",label:"Clean",font:"system-ui",shape:"round",hero:"heroSplit",density:"comfortable",dark:false},
- {id:"editorial",label:"Editorial",font:"Verdana",shape:"square",hero:"editorial",density:"compact",dark:false},
- {id:"night",label:"Night",font:"Courier New",shape:"round",hero:"heroFull",density:"compact",dark:true}
+
+const KEY="radarPlatformsV10";
+const OLD_KEYS=["radarPlatformsV9","radarPlatformsV8","radarPlatformsV7"];
+const PEXELS_ENDPOINT="https://api.pexels.com/v1/search";
+
+const DESIGNS=[
+ {id:"impacto",name:"Hero Impacto",desc:"Imagem grande, marca forte e CTA",types:["restaurant","pizza","generic","shop"]},
+ {id:"editorial",name:"Editorial",desc:"Tipografia grande e composição assimétrica",types:["restaurant","salon","shop","generic"]},
+ {id:"bento",name:"Bento",desc:"Blocos visuais variados",types:["pet","shop","market","generic"]},
+ {id:"catalogo",name:"Catálogo",desc:"Produtos e serviços em primeiro plano",types:["shop","market","pet","restaurant"]},
+ {id:"premium",name:"Premium",desc:"Minimalista, elegante e sofisticado",types:["restaurant","barber","salon","hotel","generic"]},
+ {id:"bold",name:"Bold",desc:"Contraste forte e títulos grandes",types:["barber","gym","shop","pizza"]},
+ {id:"natural",name:"Natural",desc:"Orgânico, leve e acolhedor",types:["pet","market","restaurant","generic"]},
+ {id:"servicos",name:"Serviços",desc:"Feito para negócios de atendimento",types:["barber","salon","gym","generic"]},
+ {id:"menu",name:"Menu",desc:"Estrutura focada em cardápio",types:["restaurant","pizza","cafe"]},
+ {id:"local",name:"Local Business",desc:"Contato, localização e conversão",types:["generic","barber","salon","pet","shop"]}
 ];
-const IMAGE_PROMPTS={restaurant:"professional food photography for a Brazilian restaurant, appetizing plated dish, realistic, no text, no logos",pizza:"professional food photography of a Brazilian pizzeria pizza, melted cheese, realistic, no text, no logos",barber:"premium modern barbershop interior, realistic commercial photography, no text, no logos",salon:"modern beauty salon interior, elegant, realistic commercial photography, no text, no logos",shop:"modern retail storefront and curated products, realistic commercial photography, no text, no logos",market:"modern neighborhood grocery market with fresh products, realistic commercial photography, no text, no logos",gym:"modern fitness studio with equipment, realistic commercial photography, no text, no logos",cafe:"cozy modern coffee shop with coffee and pastries, realistic commercial photography, no text, no logos",bakery:"artisan bakery with breads and pastries, realistic commercial photography, no text, no logos",clinic:"clean modern clinic reception, professional and welcoming, realistic commercial photography, no text, no logos",hotel:"modern boutique hotel lobby, elegant and welcoming, realistic commercial photography, no text, no logos",car_repair:"clean modern automotive workshop, realistic commercial photography, no text, no logos",generic:"professional modern local business interior, realistic commercial photography, no text, no logos"};
-function variantFor(p){if(p.visualVariant&&V9_VARIANTS.some(v=>v.id===p.visualVariant))return V9_VARIANTS.find(v=>v.id===p.visualVariant);let h=0;for(const c of String(p.id||p.name||""))h=(h*31+c.charCodeAt(0))>>>0;return V9_VARIANTS[h%V9_VARIANTS.length]}
-const RELEVANT_STOCK={restaurant:["https://images.unsplash.com/photo-1515003197210-e0cd71810b5f?auto=format&fit=crop&w=1400&q=85","https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=1000&q=85"],pizza:["https://images.unsplash.com/photo-1574071318508-1cdbab80d002?auto=format&fit=crop&w=1400&q=85"],barber:["https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=1400&q=85","https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=1000&q=85"],salon:["https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1400&q=85"],shop:["https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1400&q=85"],market:["https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1400&q=85"],gym:["https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1400&q=85"],cafe:["https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1400&q=85"],bakery:["https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&w=1400&q=85"],clinic:["https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=1400&q=85"],hotel:["https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1400&q=85"],car_repair:["https://images.unsplash.com/photo-1486006920555-c77dcf18193c?auto=format&fit=crop&w=1400&q=85"],generic:["https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1400&q=85"]};
-function relevantImage(type,role="hero",subject=""){const k=tplKey(type),arr=RELEVANT_STOCK[k]||RELEVANT_STOCK.generic;let h=0;for(const c of String(subject||role))h=(h*31+c.charCodeAt(0))>>>0;return arr[h%arr.length]}
-function aiImageURL(type,role="hero",subject=""){const k=tplKey(type),prompt=(IMAGE_PROMPTS[k]||IMAGE_PROMPTS.generic)+`, ${role} image for ${subject||k}`;return `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=black-forest-labs/flux.1-schnell&width=${role==="hero"?1400:900}&height=${role==="hero"?900:700}`}
-function rotateVariant(p){const i=V9_VARIANTS.findIndex(v=>v.id===variantFor(p).id),v=V9_VARIANTS[(i+1)%V9_VARIANTS.length];Object.assign(p,{visualVariant:v.id,layoutVariant:v.hero,density:v.density,btn:v.shape,font:v.font,dark:v.dark});return v}
-function generateSuggestedItems(type,name){const k=tplKey(type);const sets={restaurant:[["Pratos","Prato executivo","","Sugestão — confirme ingredientes e preço."],["Pratos","Parmegiana","","Sugestão — confirme disponibilidade."],["Bebidas","Refrigerante","","Sugestão — confirme marcas e tamanhos."],["Sobremesas","Sobremesa da casa","","Sugestão — confirme opção do dia."]],pizza:[["Pizzas","Calabresa","","Sugestão — confirme sabor e ingredientes."],["Pizzas","Mussarela","","Sugestão — confirme sabor e ingredientes."],["Pizzas","Frango com catupiry","","Sugestão — confirme sabor e ingredientes."],["Bebidas","Refrigerante 2L","","Sugestão — confirme disponibilidade."]],barber:[["Serviços","Corte masculino","","Sugestão — confirme valor e duração."],["Serviços","Barba","","Sugestão — confirme valor e duração."],["Serviços","Corte + barba","","Sugestão — confirme valor e duração."]],salon:[["Cabelo","Corte","","Sugestão — confirme valor e duração."],["Cabelo","Escova","","Sugestão — confirme valor e duração."],["Unhas","Manicure","","Sugestão — confirme valor e duração."]],shop:[["Produtos","Produto em destaque","","Sugestão — substitua pelo produto real."],["Novidades","Lançamento","","Sugestão — substitua por um item real."],["Promoções","Oferta especial","","Sugestão — confirme preço e estoque."]],market:[["Ofertas","Oferta da semana","","Sugestão — confirme preço e validade."],["Mercearia","Arroz 5kg","","Sugestão — confirme marca e preço."],["Bebidas","Refrigerante 2L","","Sugestão — confirme marca e preço."]]};return(sets[k]||sets.shop).map(([cat,n,price,desc])=>({cat,name:n,price,desc,img:relevantImage(type,"item",n)}))}
-/* ---------- utilidades ---------- */
-function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
-function setStatus(t,e=false){$("status").textContent=t;$("status").className="status"+(e?" error":"")}
-function wa(v){if(!v)return"";if(/^https?:\/\//i.test(v))return v;let n=v.replace(/\D/g,"");if(n.length===10||n.length===11)n="55"+n;return n?"https://wa.me/"+n:""}
-function ig(v){if(!v)return"";if(/^https?:\/\//i.test(v))return v;return"https://instagram.com/"+v.replace(/^@/,"")}
-function distance(a,b){const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180,x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x))}
-async function getJSON(url,timeout=7000){const c=new AbortController(),t=setTimeout(()=>c.abort(),timeout);try{const r=await fetch(url,{signal:c.signal,headers:{Accept:"application/json"}});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}}
-try{const im=new Image();im.onload=()=>{try{const c=document.createElement("canvas");c.width=c.height=64;c.getContext("2d").drawImage(im,0,0,64,64);logoURL=c.toDataURL("image/png")}catch{}};im.src="logo.png"}catch{}
-/* ---------- Radar: geocodificação com fallback ---------- */
-async function geocode(q){
- const m=q.match(/^\s*(-?\d+\.\d+)\s*[,;]\s*(-?\d+\.\d+)\s*$/);if(m)return{lat:+m[1],lon:+m[2]};
- if(here&&q===here.label)return here;
- try{const d=await getJSON("https://nominatim.openstreetmap.org/search?"+new URLSearchParams({format:"jsonv2",limit:"1",q}),7000);if(d.length)return{lat:+d[0].lat,lon:+d[0].lon}}catch{}
- const d=await getJSON("https://photon.komoot.io/api/?"+new URLSearchParams({q,limit:"1"}),8000);const f=d.features&&d.features[0];
- if(!f)throw Error("Localização não encontrada.");return{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]}}
-/* ---------- Radar: consulta com vários servidores (escalonados, o primeiro que responder vence) ---------- */
-function overpassQuery(c,r,k){const area=`(around:${r},${c.lat},${c.lon})`,tail="out center meta 250;";
- if(k==="pizza")return`[out:json][timeout:15];nwr${area}[name][cuisine~"pizza",i];${tail}`;
- const map={restaurant:'[amenity="restaurant"]',fast_food:'[amenity="fast_food"]',shop:'[shop]',market:'[shop~"supermarket|convenience|greengrocer|butcher"]',hairdresser:'[shop~"hairdresser|barber|beauty"]',cafe:'[amenity="cafe"]',gym:'[leisure="fitness_centre"]',clinic:'[amenity="clinic"]',hotel:'[tourism="hotel"]',car_repair:'[shop="car_repair"]',bakery:'[shop="bakery"]'};
- return`[out:json][timeout:15];nwr${area}[name]${map[k]||"[name]"};${tail}`}
-function queryServers(q){return new Promise((ok,bad)=>{let n=0,done=false;const cs=[];const fin=(f,v)=>{if(!done){done=true;cs.forEach(c=>c.abort());f(v)}};
- SERVERS.forEach((s,i)=>setTimeout(()=>{if(done)return;setStatus(`Consultando servidor ${i+1} de ${SERVERS.length}...`);const c=new AbortController();cs.push(c);const t=setTimeout(()=>c.abort(),15000);
-  fetch(s+"?data="+encodeURIComponent(q),{signal:c.signal}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(d=>{if(d.remark&&!(d.elements||[]).length)throw 0;fin(ok,d)}).catch(()=>{}).finally(()=>{clearTimeout(t);if(++n===SERVERS.length&&!done)fin(bad,Error("all"))})},i*2500));
- setTimeout(()=>fin(bad,Error("timeout")),32000)})}
-/* ---------- Verificação dos estabelecimentos ---------- */
-function typeOf(t,name){const s=(name+" "+(t.cuisine||"")).toLowerCase();if(s.includes("pizza"))return"pizza";if(t.amenity==="restaurant")return"restaurant";if(t.amenity==="fast_food")return"fast_food";
- if(t.shop==="hairdresser"||t.shop==="barber"||t.shop==="beauty")return(/barb/i.test(name)||t.shop==="barber")?"barber":"salon";if(t.amenity==="cafe")return"cafe";if(t.shop==="bakery")return"bakery";
- if(/supermarket|convenience|greengrocer|butcher/.test(t.shop||""))return"market";if(t.shop==="car_repair")return"car_repair";if(t.shop)return"shop";if(t.leisure==="fitness_centre")return"gym";if(t.amenity==="clinic")return"clinic";if(t.tourism==="hotel")return"hotel";return"other"}
-function freshness(e,t){const d=t.check_date||t["survey:date"]||e.timestamp;if(!d)return null;const dt=new Date(d);if(isNaN(dt))return null;return{date:dt,years:(Date.now()-dt)/31557600000,confirmed:!!(t.check_date||t["survey:date"])}}
-function parseBusiness(e,i,c){const t=e.tags||{},p=e.center||e;let site=t.website||t["contact:website"]||"",insta=t.instagram||t["contact:instagram"]||"";
- if(/instagram\.com/i.test(site)){insta=insta||site;site=""}
- const f=freshness(e,t);
- return{id:e.type+e.id+"-"+i,name:t.name||"",type:typeOf(t,t.name||""),phone:t.phone||t["contact:phone"]||t["contact:mobile"]||"",whatsapp:t.whatsapp||t["contact:whatsapp"]||"",instagram:insta,website:site,hours:t.opening_hours||"",
- address:[t["addr:street"],t["addr:housenumber"],t["addr:suburb"],t["addr:city"]].filter(Boolean).join(", "),lat:+p.lat,lon:+p.lon,fresh:f,distance:distance(c,{lat:+p.lat,lon:+p.lon})}}
-function isValid(b){if(!b.name||!b.phone||!(b.whatsapp||b.instagram)||!Number.isFinite(b.lat))return false;if(b.fresh&&b.fresh.years>5)return false;return true}
-/* ---------- Análise de design / presença digital ---------- */
-function analyze(b){const n=[];let s=0;
- if(!b.website){s+=3;n.push("Sem site identificado: oportunidade de criar um site/cardápio/catálogo próprio.")}else{n.push("Site encontrado: revisar aparência, versão mobile, velocidade e botão de contato.");if(/^http:\/\//i.test(b.website)){s+=1;n.push("Site sem HTTPS (endereço http): sinal de site desatualizado.")}}
- if(!b.instagram){s+=2;n.push("Sem Instagram na base pública: presença visual não identificada.")}else n.push("Instagram encontrado: abra o perfil para avaliar identidade visual, bio, destaques e padrão das artes (a análise das imagens é manual).");
- if(!b.hours){s+=1;n.push("Horário de funcionamento não cadastrado: a plataforma pode centralizar essa informação.")}
- if(!b.address){s+=1;n.push("Endereço incompleto na base pública.")}
- if(b.fresh&&b.fresh.years>2){s+=1;n.push("Cadastro com mais de 2 anos sem revisão: confirme os dados antes de contatar.")}
- const idea={restaurant:"cardápio digital com pedido por WhatsApp",pizza:"cardápio digital com pedido por WhatsApp",fast_food:"cardápio digital com pedido por WhatsApp",barber:"página com serviços, preços e agendamento",salon:"página com serviços, galeria e agendamento",shop:"catálogo de produtos com botão de compra",market:"página de ofertas da semana"}[b.type]||"página institucional com contato";
- n.push("Sugestão de oferta: "+idea+".");return{score:s,level:s>=4?"Alta":s>=2?"Média":"Baixa",notes:n}}
-/* ---------- Radar: busca ---------- */
-async function search(){const q=$("location").value.trim();if(!q){setStatus("Digite uma cidade, bairro ou endereço, ou use sua localização.",true);return}
- $("search").disabled=true;$("search").textContent="⏳ Pesquisando...";
- try{setStatus("Localizando a região...");const c=await geocode(q);setStatus("Consultando servidores de mapas...");
-  const d=await queryServers(overpassQuery(c,+$("radius").value,$("category").value));
-  results=(d.elements||[]).map((e,i)=>parseBusiness(e,i,c)).filter(isValid).sort((a,b)=>a.distance-b.distance);render();
-  setStatus(`Pronto: ${results.length} negócios qualificados (telefone + WhatsApp/Instagram + dados recentes).`)}
- catch(e){setStatus(e.message==="Localização não encontrada."?e.message:"Nenhum servidor respondeu a tempo (tentamos "+SERVERS.length+"). Tente novamente em instantes ou diminua o raio.",true)}
- finally{$("search").disabled=false;$("search").textContent="🔍 Pesquisar"}}
-function render(){let a=results;if(filter==="website")a=a.filter(x=>!x.website);if(filter==="design")a=a.filter(x=>analyze(x).score>=2);
- $("count").textContent=results.length;$("siteOpp").textContent=results.filter(x=>!x.website).length;$("opp").textContent=results.filter(x=>analyze(x).score>=2).length;
- $("results").innerHTML=a.length?a.map(card).join(""):'<div class="panel">Nenhum negócio encontrado com os requisitos mínimos.</div>'}
-function card(b){const a=analyze(b),cls={Alta:"b-hi",Média:"b-mid",Baixa:"b-lo"}[a.level];
- const fr=b.fresh?`<span class="badge ${b.fresh.years<=2?"b-ok":"b-warn"}">${b.fresh.confirmed?"Confirmado":"Editado"} em ${b.fresh.date.toLocaleDateString("pt-BR")}</span>`:"";
- return`<article class="card"><div class="card-title"><div><h3>${esc(b.name)}</h3><span class="chip">${esc(labels[b.type])}</span> <span class="chip">${b.distance.toFixed(1)} km</span></div><button class="primary create" data-id="${b.id}">🛠️ Criar plataforma</button></div>
- <div style="margin-top:8px">${fr}<span class="badge ${cls}">Oportunidade ${a.level}</span></div>
- <div class="meta">📞 ${esc(b.phone)}<br>💬 ${b.whatsapp?esc(b.whatsapp):"Não encontrado"}<br>📷 ${b.instagram?esc(b.instagram):"Não encontrado"}<br>📍 ${esc(b.address||"Endereço não cadastrado")}</div>
- <div class="links"><a href="tel:${esc(b.phone)}">Ligar</a><button data-copy="${esc(b.phone)}">Copiar telefone</button>${b.whatsapp?`<a href="${esc(wa(b.whatsapp))}" target="_blank" rel="noopener">WhatsApp</a>`:""}${b.instagram?`<a href="${esc(ig(b.instagram))}" target="_blank" rel="noopener">Instagram</a>`:""}${b.website?`<a href="${esc(b.website)}" target="_blank" rel="noopener">Site</a>`:""}</div>
- <div class="analysis"><b>🎨 Análise de presença/design</b><ul>${a.notes.map(x=>`<li>${esc(x)}</li>`).join("")}</ul><small>O radar não acessa imagens do Instagram/site: o julgamento visual final deve ser feito abrindo os links.</small></div></article>`}
-/* ---------- Modelo de plataforma ---------- */
-const defaultSections=()=>Object.keys(SECTIONS).map(k=>({k,on:true}));
-function sectionsForLevel(level){const base={essential:["about","items","contact"],professional:["about","items","gallery","reviews","contact","location"],complete:Object.keys(SECTIONS)};const allowed=base[level]||base.professional;return Object.keys(SECTIONS).map(k=>({k,on:allowed.includes(k)}))}
-function presetFor(type){const k=tplKey(type);return PRESETS.find(p=>p.for.includes(k))||PRESETS.find(p=>p.id==="gen1")}
-function autoVisualFor(p){const k=tplKey(p.type),imgs=IMAGE_BANK[k]||IMAGE_BANK.generic,map={restaurant:"heroFull",pizza:"heroFull",barber:"heroSplit",salon:"heroSplit",shop:"heroSplit",market:"heroFull",generic:"heroSplit"};return{visualStyle:p.visualStyle&&VISUAL_STYLES[p.visualStyle]?p.visualStyle:"auto",layoutVariant:p.layoutVariant&&LAYOUTS[p.layoutVariant]?p.layoutVariant:(map[k]||"heroSplit"),images:imgs}}
-function fillContent(p){const T=TPL[tplKey(p.type)],pr=presetFor(p.type),v=variantFor(p);p.title=p.title||p.name;p.description=T.about(p.name);p.items=generateSuggestedItems(p.type,p.name);p.sections=sectionsForLevel(p.level||"professional");p.gallery=[relevantImage(p.type,"gallery",p.name),relevantImage(p.type,"environment",p.name),relevantImage(p.type,"detail",p.name)];p.reviews=p.reviews||[];p.visualVariant=v.id;Object.assign(p,{c1:pr.c1,c2:pr.c2,font:v.font,dark:v.dark,visualStyle:"auto",layoutVariant:v.hero,density:v.density,btn:v.shape,banner:relevantImage(p.type,"hero",p.name),contentIsSuggested:true})}
-function norm(p){if(typeof p.items==="string")p.items=p.items.split(/\n+/).filter(Boolean).map(l=>{const[m,...r]=l.split(/\s[—-]\s/);return{cat:"",name:m.trim(),price:r.join(" ").replace(/^R\$\s*/,""),desc:"",img:""}});if(p.type==="hairdresser")p.type=/barb/i.test(p.name||"")?"barber":"salon";const pr=presetFor(p.type||"other"),v=variantFor(p);return Object.assign({title:p.name,description:"",items:[],gallery:[],reviews:[],banner:"",btn:v.shape,level:p.level||"professional",sections:sectionsForLevel(p.level||"professional"),published:false,c1:p.color||pr.c1,c2:pr.c2,font:v.font,dark:v.dark,visualStyle:"auto",layoutVariant:v.hero,density:v.density,visualVariant:v.id,contentIsSuggested:false},p)}
-platforms=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||localStorage.getItem("radarPlatformsV7")||"[]").map(norm);
-function save(){localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms()}
-function createPlatform(b){const p=norm({id:crypto.randomUUID(),name:b.name,type:b.type,phone:b.phone,whatsapp:b.whatsapp,instagram:b.instagram,address:b.address,createdAt:new Date().toISOString(),level:"professional",visualStyle:"auto"});fillContent(p);platforms.push(p);save();openEditor(p,"adm")}
-/* ---------- Renderização do site do cliente ---------- */
-function money(v){v=String(v||"").trim();return v?(/^R\$/i.test(v)?v:"R$ "+v):""}
-function siteCSS(p){const v=variantFor(p);const r={pill:"999px",round:"12px",square:"2px"}[p.btn||v.shape]||"999px";const dark=p.dark,accent=p.c1||"#d89b3d",second=p.c2||"#191919";const max=p.level==="complete"?1240:p.level==="professional"?1160:980;const gap=p.density==="compact"?12:18;const heroMin=v.id==="clean"?560:v.id==="bold"?700:650;const radius=v.id==="square"?2:v.id==="luxe"?24:14;return`*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:${dark?"#0b0b0d":"#f5f2ed"};color:${dark?"#f5f2ec":"#171717"}.site{--c1:${accent};--c2:${second};--surface:${dark?"#151518":"#fff"};--muted:${dark?"#b7b1a8":"#666"};font-family:${p.font},system-ui,sans-serif;line-height:1.55;min-height:100vh}.site *{box-sizing:border-box}.nav{position:sticky;top:0;z-index:10;background:${dark?"rgba(8,8,9,.86)":"rgba(255,255,255,.9)"};backdrop-filter:blur(14px);padding:15px clamp(18px,5vw,70px);display:flex;align-items:center;gap:22px;border-bottom:1px solid rgba(128,128,128,.18)}.nav a{color:${dark?"#fff":"#111"};text-decoration:none;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}.nav .brand{margin-right:auto;font-size:19px;text-transform:none;letter-spacing:0}.nav .btn{color:#fff}.hero{min-height:${heroMin}px;display:flex;align-items:center;background-size:cover;background-position:center;color:#fff;position:relative}.hero:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.82),rgba(0,0,0,.38) 62%,rgba(0,0,0,.1))}.hero-content{position:relative;z-index:1;max-width:${max}px;width:100%;margin:auto;padding:80px clamp(20px,6vw,80px)}.hero.center{text-align:center;justify-content:center}.hero.center .hero-content{max-width:850px}.hero.editorial{align-items:flex-end}.hero h1{font-size:clamp(46px,7vw,92px);line-height:.94;letter-spacing:-.045em;margin:14px 0;max-width:900px}.hero p{font-size:clamp(15px,1.7vw,20px);max-width:680px;color:rgba(255,255,255,.85);margin:0 0 25px}.eyebrow{display:inline-block;text-transform:uppercase;letter-spacing:.18em;font-size:11px;color:${accent};font-weight:900}.hero-actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-flex;align-items:center;justify-content:center;background:${accent};color:#fff!important;padding:12px 20px;text-decoration:none;font-weight:900;border-radius:${r};margin:4px;border:1px solid transparent}.btn.o{background:transparent;border-color:rgba(255,255,255,.75)}.wrap{max-width:${max}px;margin:auto;padding:20px clamp(18px,4vw,45px) 80px}.site section{padding:65px 0}.site section.alt{background:${dark?"#111114":"#fff"};margin-left:-45px;margin-right:-45px;padding-left:45px;padding-right:45px}.site h2{font-size:clamp(30px,4vw,52px);line-height:1;letter-spacing:-.035em;margin:8px 0 25px}.kicker{font-size:11px;text-transform:uppercase;letter-spacing:.18em;font-weight:900;color:${accent}}.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:${gap}px}.it{display:flex;gap:14px;padding:0;border:1px solid rgba(128,128,128,.15);background:${dark?"#151518":"#fff"};border-radius:${radius}px;overflow:hidden;margin:0}.it img{width:150px;height:150px;object-fit:cover}.it div{padding:16px;flex:1}.it small{opacity:.72}.pr{font-weight:900;color:${accent};white-space:nowrap;padding:16px}.gal{display:grid;grid-template-columns:1.4fr .8fr .8fr;grid-auto-rows:220px;gap:10px}.gal img{width:100%;height:100%;object-fit:cover;border-radius:12px}.gal img:first-child{grid-row:span 2}.rv,.feature,.faq{padding:22px;border-radius:15px;background:${dark?"#151518":"#fff"};border:1px solid rgba(128,128,128,.14);margin:0}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.feature img{width:100%;aspect-ratio:1.1;object-fit:cover}.story{display:grid;grid-template-columns:1fr 1fr;gap:35px;align-items:center}.story img{width:100%;aspect-ratio:1.1;object-fit:cover;border-radius:16px}.promo{padding:35px;border-radius:18px;background:linear-gradient(110deg,${accent},${second});color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px}.promo h2{margin:0;color:#fff}.contact{display:grid;grid-template-columns:1fr 1fr;gap:25px;padding:35px;border-radius:18px;background:${second};color:#fff}.site footer{padding:45px clamp(20px,5vw,70px);background:${dark?"#050506":"#111"};color:#fff;display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:25px}.site footer h4{color:${accent};margin:0 0 8px}.site footer p,.site footer a{color:#aaa;font-size:12px}.wm{position:fixed;right:8px;bottom:8px;width:20px;height:20px;opacity:.25;pointer-events:none;border-radius:4px}.wordmark{font-weight:950;letter-spacing:-.045em;text-wrap:balance}.nav .wordmark{font-size:20px}.site a{text-underline-offset:3px}@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.story,.contact{grid-template-columns:1fr}.site section.alt{margin-left:-18px;margin-right:-18px;padding-left:18px;padding-right:18px}.site footer{grid-template-columns:1fr 1fr}}@media(max-width:620px){.nav a:not(.brand){display:none}.hero{min-height:590px}.hero h1{font-size:48px}.cards{grid-template-columns:1fr}.gal{grid-template-columns:1fr 1fr;grid-auto-rows:170px}.gal img:first-child{grid-row:span 1}.it{display:block}.it img{width:100%;height:180px}.contact,.site footer{grid-template-columns:1fr}.promo{display:block}}`}
-function siteHTML(p){const T=TPL[tplKey(p.type)],enabled=new Set((p.sections||[]).filter(s=>s.on).map(s=>s.k));const imgs=(p.gallery&&p.gallery.filter(Boolean).length?p.gallery:IMAGE_BANK[tplKey(p.type)]||IMAGE_BANK.generic).filter(Boolean);const layout=p.layoutVariant||"heroSplit";const heroClass=layout==="heroCentered"?"center":layout==="editorial"?"editorial":"";const navKeys=["about","items","offers","gallery","team","reviews","faq","location","contact"].filter(k=>enabled.has(k));const anchor=k=>k==="about"?"sobre":k==="items"?(T.kind.toLowerCase().includes("serv")?"servicos":"cardapio"):k;const nav=p.level==="essential"?"":`<nav class="nav"><a class="brand wordmark" href="#top"><span>${esc(p.name)}</span></a>${navKeys.slice(0,6).map(k=>`<a href="#${anchor(k)}">${esc(SECTIONS[k])}</a>`).join("")}${p.whatsapp?`<a class="btn" href="${esc(wa(p.whatsapp))}" target="_blank">${p.type==="barber"||p.type==="salon"?"Agendar":"Pedir agora"}</a>`:""}</nav>`;const cta=p.whatsapp?`<a class="btn" href="${esc(wa(p.whatsapp))}" target="_blank">${p.type==="barber"||p.type==="salon"?"Agendar pelo WhatsApp":"Pedir pelo WhatsApp"}</a>`:"";const bg=p.banner||imgs[0]?` style="background-image:url('${esc(p.banner||imgs[0])}')"`:"";const hero=`<header class="hero ${heroClass}"${bg}><div class="hero-content"><span class="eyebrow">${esc(labels[p.type]||"Estabelecimento")} · ${esc(VISUAL_STYLES[p.visualStyle||"auto"].name)}</span><h1>${esc(p.title||p.name)}</h1><p>${esc(p.description||"")}</p><div class="hero-actions">${cta}${p.instagram?`<a class="btn o" href="${esc(ig(p.instagram))}" target="_blank">Instagram</a>`:""}</div></div></header>`;const S={about:()=>p.description?`<section id="sobre"><div class="story"><div><span class="kicker">Conheça</span><h2>Uma experiência feita para você.</h2><p>${esc(p.description)}</p>${cta}</div>${imgs[0]?`<img src="${esc(imgs[0])}" alt="">`:""}</div></section>`:"",items:()=>{if(!p.items.length)return"";const cats=[...new Set(p.items.map(i=>i.cat||""))];return`<section id="${anchor("items")}" class="alt"><span class="kicker">Destaques</span><h2>${esc(T.kind)}</h2><div class="cards">${p.items.slice(0,8).map((i,n)=>`<article class="feature">${i.img||imgs[n%imgs.length]?`<img src="${esc(i.img||imgs[n%imgs.length])}" alt="">`:""}<div><small>${esc(i.cat||"Destaque")}</small><h3>${esc(i.name)}</h3><p>${esc(i.desc||"")}</p><strong class="pr">${esc(money(i.price))}</strong></div></article>`).join("")}</div></section>`},offers:()=>enabled.has("offers")?`<section id="ofertas"><div class="promo"><div><span class="kicker" style="color:#fff">Oferta</span><h2>Destaques da semana</h2></div>${cta}</div></section>`:"",gallery:()=>imgs.length?`<section id="galeria"><span class="kicker">Visual</span><h2>Galeria</h2><div class="gal">${imgs.slice(0,5).map(x=>`<img src="${esc(x)}" alt="">`).join("")}</div></section>`:"",reviews:()=>p.reviews.length?`<section id="avaliacoes"><span class="kicker">Confiança</span><h2>Avaliações</h2><div class="cards">${p.reviews.slice(0,3).map(r=>`<div class="rv"><b style="color:var(--c1)">★★★★★</b><p>${esc(r.text)}</p><strong>— ${esc(r.name)}</strong></div>`).join("")}</div></section>`:"",faq:()=>enabled.has("faq")?`<section id="faq"><span class="kicker">Ajuda</span><h2>Perguntas frequentes</h2><div class="faq"><b>Como entrar em contato?</b><p>Use WhatsApp, telefone ou Instagram.</p></div><div class="faq"><b>Onde fica?</b><p>${esc(p.address||"Consulte nosso contato.")}</p></div></section>`:"",team:()=>enabled.has("team")?`<section id="equipe"><span class="kicker">Equipe</span><h2>Quem atende você</h2><div class="cards"><div class="feature"><h3>Profissional 1</h3><p>Edite pelo ADM.</p></div><div class="feature"><h3>Profissional 2</h3><p>Edite pelo ADM.</p></div><div class="feature"><h3>Profissional 3</h3><p>Edite pelo ADM.</p></div></div></section>`:"",location:()=>enabled.has("location")?`<section id="localizacao"><div class="contact"><div><span class="kicker" style="color:#fff">Visite</span><h2>Estamos por aqui.</h2><p>${esc(p.address||"Endereço não cadastrado")}</p>${p.address?`<a class="btn" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank">Abrir no mapa</a>`:""}</div><div><h3>Contato</h3><p>${esc(p.phone||"")}</p>${cta}</div></div></section>`:"",contact:()=>`<section id="contato" class="alt"><div class="contact"><div><span class="kicker" style="color:#fff">Contato</span><h2>Vamos conversar?</h2><p>${esc(p.address||"")}</p></div><div>${cta}${p.phone?`<a class="btn o" href="tel:${esc(p.phone)}">Ligar</a>`:""}</div></div></section>`};return`<div class="site" id="top">${nav}${hero}<main class="wrap">${navKeys.map(k=>S[k]()).join("")}</main><footer><div><h3>${esc(p.name)}</h3><p>${esc(p.description||"")}</p></div><div><h4>Contato</h4><p>${esc(p.phone||"")}</p><p>${esc(p.address||"")}</p></div><div><h4>Redes</h4>${p.instagram?`<p><a href="${esc(ig(p.instagram))}" target="_blank">Instagram</a></p>`:""}${p.whatsapp?`<p><a href="${esc(wa(p.whatsapp))}" target="_blank">WhatsApp</a></p>`:""}</div><div><h4>Radar</h4><p>Site criado com o Radar de Clientes.</p></div></footer><img class="wm" src="${esc(logoURL)}" alt=""></div>`}
-const fullDoc=p=>`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="${esc(p.description||p.name)}"><meta property="og:title" content="${esc(p.title||p.name)}"><meta property="og:description" content="${esc(p.description||"")}"><title>${esc(p.title||p.name)}</title><style>${siteCSS(p)}</style></head><body>${siteHTML(p)}</body></html>`;
-/* ---------- Editor: criador + Designer + ADM (mesmo painel) ---------- */
-const getP=(o,path)=>path.split(".").reduce((a,k)=>a==null?a:a[k],o);
-function setP(o,path,v){const ks=path.split(".");const l=ks.pop();ks.reduce((a,k)=>a[k],o)[l]=v}
-const inp=(path,label,type="text",ph="")=>`<label>${label}<input type="${type}" data-p="${path}" placeholder="${esc(ph)}" value="${esc(getP(ed,path)||"")}"></label>`;
-const sel=(path,label,opts)=>`<label>${label}<select data-p="${path}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(getP(ed,path))===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
-const mini=(path,ph)=>`<input data-p="${path}" placeholder="${ph}" value="${esc(getP(ed,path)||"")}">`;
-function openEditor(p,mode){ed=JSON.parse(JSON.stringify(p));edMode=mode;tab=mode==="adm"?"conteudo":"dados";$("edTitle").textContent=mode==="adm"?"ADM — "+p.name:mode==="create"?"Criar plataforma — "+p.name:"Editar — "+p.name;renderTab();$("editorDialog").showModal()}
-function publicLinkFor(p){return shareLink(p,"site").url}
-function admHeader(){const pub=publicLinkFor(ed);return `<div class="adm-top"><div><span class="eyebrow-ui">🔐 ADM V9</span><strong>${esc(ed.name)}</strong><small>Edite e publique o site do cliente.</small></div><div class="adm-links"><a class="primary" href="${esc(pub)}" target="_blank">🌐 Abrir site público</a><button type="button" data-act="copy-public">📋 Copiar link público</button></div></div>`}
-function renderTab(){const T=TPL[tplKey(ed.type)];$("tabs").innerHTML=[["dados","① Informações"],["conteudo","② Conteúdo"],["design","③ Visual"],["previa","④ Prévia"]].map(([k,v])=>`<button type="button" data-act="tab" data-v="${k}" class="${k===tab?"active":""}">${v}</button>`).join("");$("edBody").innerHTML=(edMode==="adm"?admHeader():"")+({dados:tabDados,conteudo:tabConteudo,design:tabDesign,previa:tabPrevia})[tab]();if(tab==="previa")drawFrame()}
-function tabDados(){return`<div class="creator-intro"><div><span class="eyebrow-ui">CRIADOR V9</span><h3>Monte o site de ${esc(ed.name||"seu negócio")}</h3><p>O Radar gera uma primeira versão visual e conteúdo sugerido. Confirme tudo antes de publicar.</p></div><button type="button" class="primary" data-act="auto">✨ Gerar automaticamente</button></div><h4>1. Nível do site</h4><div class="level-grid">${Object.entries(LEVELS).map(([k,v])=>`<label class="level-card ${ed.level===k?"selected":""}"><input type="radio" name="site-level" data-p="level" value="${k}" ${ed.level===k?"checked":""}><strong>${v.name}</strong><span>${v.desc}</span></label>`).join("")}</div><h4>2. Informações</h4><div class="admin-grid">${sel("type","Tipo",Object.entries(labels))}${inp("name","Nome")}${inp("title","Título principal")}${inp("phone","Telefone")}${inp("whatsapp","WhatsApp")}${inp("instagram","Instagram")}</div>${inp("address","Endereço")}<label>Descrição<textarea data-p="description" rows="3">${esc(ed.description||"")}</textarea></label>`}
-function tabConteudo(){const T=TPL[tplKey(ed.type)];return`<div class="suggestion-note">💡 <b>Sugestões automáticas:</b> estes itens foram inferidos pelo tipo de negócio. Não são dados confirmados do cliente. Revise nome, preço, descrição e imagem antes de publicar.</div><h4>${T.kind}</h4>${ed.items.map((it,i)=>`<div class="row">${mini(`items.${i}.cat`,"Categoria")}${mini(`items.${i}.name`,"Nome")}${mini(`items.${i}.price`,"Preço")}${mini(`items.${i}.desc`,"Descrição")}<input class="full" data-p="items.${i}.img" placeholder="URL da imagem (ou envie um arquivo abaixo)" value="${it.img&&it.img.startsWith("data:")?"(imagem enviada)":esc(it.img||"")}" ${it.img&&it.img.startsWith("data:")?"readonly":""}><input type="file" accept="image/*" data-file="items.${i}.img"><button type="button" data-act="del" data-l="items" data-i="${i}">🗑️ Remover</button></div>`).join("")}<div class="actions"><button type="button" data-act="add" data-l="items">➕ Adicionar item</button></div>`}
-function tabDesign(){return`<div class="design-intro"><span class="eyebrow-ui">③ VISUAL</span><h3>Visual automático primeiro</h3><p>V9 combina composição, tipografia, espaçamento e identidade para evitar sites iguais.</p></div><div class="variation-card"><div><strong>🎲 Versão atual: ${esc(variantFor(ed).label)}</strong><p>Troque a composição sem apagar seus textos, contatos ou itens.</p></div><button type="button" class="primary" data-act="variant">🔄 Gerar outra versão</button></div><details><summary>⚙️ Personalizar visual</summary><h4>Direção</h4><div class="style-grid">${Object.entries(VISUAL_STYLES).map(([id,v])=>`<button type="button" data-act="style" data-v="${id}" class="style-card ${ed.visualStyle===id?"selected":""}"><strong>${v.name}</strong><span>${v.desc}</span></button>`).join("")}</div><h4>Avançado</h4><div class="admin-grid">${sel("layoutVariant","Hero / composição",Object.entries(LAYOUTS))}${sel("density","Ritmo",[["comfortable","Confortável"],["compact","Compacto"]])}${sel("btn","Botões",[["pill","Arredondados"],["round","Suaves"],["square","Quadrados"]])}${sel("font","Fonte",FONTS.map(f=>[f,f]))}${sel("dark","Tema",[["false","Claro"],["true","Escuro"]])}</div><h4>Cores</h4><div class="admin-grid">${inp("c1","Cor principal","color")}${inp("c2","Cor secundária","color")}</div></details><h4>Imagem principal</h4>${mini("banner","URL da imagem principal")}<input type="file" accept="image/*" data-file="banner"><div class="actions"><button type="button" data-act="ai-image">✨ Preparar imagem IA</button></div><h4>Galeria</h4>${ed.gallery.map((g,i)=>`<div class="row two"><input data-p="gallery.${i}" placeholder="URL da imagem" value="${g.startsWith("data:")?"(imagem enviada)":esc(g)}" ${g.startsWith("data:")?"readonly":""}><button type="button" data-act="del" data-l="gallery" data-i="${i}">🗑️</button></div>`).join("")}<div class="actions"><button type="button" data-act="add" data-l="gallery">➕ Adicionar imagem</button><label class="secondary" style="margin:0">📷 Enviar imagem<input type="file" accept="image/*" data-file="gallery.new" hidden></label></div>`}
-function tabPrevia(){return`<div class="actions"><button type="button" data-act="dev" data-v="mobile">📱 Celular</button><button type="button" data-act="dev" data-v="desktop">🖥️ Computador</button></div><div class="frame-wrap"><iframe id="frame" style="width:${dev==="mobile"?"390px":"100%"}"></iframe></div>`}
-function drawFrame(){const f=$("frame");if(f)f.srcdoc=fullDoc(ed)}
-function readImg(file,max=900){return new Promise((ok,bad)=>{const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement("canvas");c.width=im.width*s;c.height=im.height*s;c.getContext("2d").drawImage(im,0,0,c.width,c.height);ok(c.toDataURL("image/jpeg",.72))};im.onerror=bad;im.src=r.result};r.onerror=bad;r.readAsDataURL(file)})}
-const NEW={items:()=>({cat:"",name:"",price:"",desc:"",img:""}),gallery:()=>"",reviews:()=>({name:"",stars:"5",text:""})};
-$("edBody").addEventListener("input",e=>{const el=e.target,p=el.dataset.p;if(!p||el.readOnly)return;let v=el.type==="checkbox"?el.checked:el.value;if(p==="dark")v=v==="true";setP(ed,p,v);if(p==="level"){ed.sections=sectionsForLevel(v);renderTab()}});
-$("edBody").addEventListener("change",async e=>{const el=e.target;if(el.dataset.p==="dark")setP(ed,"dark",el.value==="true");if(!el.dataset.file||!el.files[0])return;try{const url=await readImg(el.files[0],el.dataset.file==="banner"?1200:800);if(el.dataset.file==="gallery.new")ed.gallery.push(url);else setP(ed,el.dataset.file,url);renderTab()}catch{alert("Não foi possível ler a imagem.")}});
-$("editorDialog").addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b)return;const a=b.dataset.act,i=+b.dataset.i,l=b.dataset.l;
- if(a==="tab"){tab=b.dataset.v;renderTab()}else if(a==="dev"){dev=b.dataset.v;renderTab()}
- else if(a==="add"){ed[l].push(NEW[l]());renderTab()}else if(a==="del"){ed[l].splice(i,1);renderTab()}
- else if(a==="up"&&i>0||a==="down"&&i<ed.sections.length-1){const j=a==="up"?i-1:i+1;[ed.sections[i],ed.sections[j]]=[ed.sections[j],ed.sections[i]];renderTab()}
- else if(a==="preset"){const p=PRESETS.find(x=>x.id===b.dataset.v);Object.assign(ed,{c1:p.c1,c2:p.c2,font:p.font,dark:p.dark});renderTab()}
- else if(a==="style"){ed.visualStyle=b.dataset.v;if(b.dataset.v==="premium")ed.dark=true;if(b.dataset.v==="minimal")ed.dark=false;renderTab()}
- else if(a==="variant"){rotateVariant(ed);renderTab()}
- else if(a==="copy-public"){copy(publicLinkFor(ed));b.textContent="✓ Link copiado";setTimeout(()=>b.textContent="📋 Copiar link público",1200)}
- else if(a==="ai-image"){ed.banner=aiImageURL(ed.type,"hero",ed.name);renderTab();setStatus("URL de imagem IA preparada. O provedor pode exigir autenticação conforme a API usada.")}
- else if(a==="auto"){if(ed.items.some(x=>x.name)&&!confirm("Substituir título, descrição, itens e visual pelo conteúdo automático do tipo?"))return;fillContent(ed);renderTab();setStatus("Conteúdo automático aplicado. Ajuste itens e preços de exemplo.")}});
-function persistEd(){if(!ed.name.trim()){alert("Informe o nome.");return null}const i=platforms.findIndex(x=>x.id===ed.id);if(i<0)platforms.push(ed);else platforms[i]=ed;const p=ed;save();return p}
-$("edSave").onclick=()=>{const p=persistEd();if(p){$("editorDialog").close();openEditor(p,"adm")}};
-$("edPublish").onclick=()=>{const p=persistEd();if(p){$("editorDialog").close();publish(p.id)}};
-$("edClose").onclick=()=>$("editorDialog").close();
-/* ---------- Minhas plataformas / prévia / publicação ---------- */
-function renderPlatforms(){$("platforms").innerHTML=platforms.length?platforms.map(p=>`<article class="platform"><div><h3>${esc(p.name)}</h3><span class="chip">${esc(labels[p.type])}</span> <span class="chip">${esc(LEVELS[p.level||"professional"].name)}</span> <span class="chip">${p.published?"Publicada":"Rascunho"}</span></div><p>${esc(p.description||"")}</p><div class="links plat-actions"><button data-adm="${p.id}" class="primary">⚙️ Abrir ADM</button><button data-edit="${p.id}">✏️ Editar dados</button><button data-preview="${p.id}">👁️ Prévia</button><button data-publish="${p.id}" class="primary">${p.published?"🔗 Copiar link":"🚀 Publicar"}</button>${p.published?`<button data-admlink="${p.id}">🔑 Link do ADM</button><button data-dl="${p.id}">⬇️ Baixar HTML</button>`:""}<button data-del="${p.id}">🗑️</button></div></article>`).join(""):'<div class="empty">Nenhuma plataforma criada. Use “Criar plataforma” em um resultado.</div>'}
-function enc(p){return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p)))))}
-function dec(x){try{return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(x)))))}catch{return null}}
-function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=q.gallery.map(cut).filter(Boolean);q.items.forEach(i=>i.img=cut(i.img));return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
-function copy(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
-function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;if(!p.published){p.published=true;save()}const{url,stripped}=shareLink(p,"site");copy(url);
- alert("Plataforma publicada. Link copiado (quando o navegador permite):\n\n"+url+(stripped?`\n\nAtenção: ${stripped} imagem(ns) enviada(s) do computador não cabem no link. Use URLs de imagem ou “Baixar HTML” para levar tudo.`:"")+(url.length>8000?"\n\nO link ficou longo; se algum app cortar, use “Baixar HTML”.":""))}
-function openPreview(id){const p=platforms.find(x=>x.id===id);if(!p)return;previewId=id;drawPreview();$("previewDialog").showModal()}
-function drawPreview(){const p=platforms.find(x=>x.id===previewId);$("pvFrame").style.width=dev==="mobile"?"390px":"100%";$("pvFrame").srcdoc=fullDoc(p)}
-document.querySelectorAll("[data-dev]").forEach(b=>b.onclick=()=>{dev=b.dataset.dev;drawPreview()});
-$("closePreview").onclick=()=>$("previewDialog").close();$("publish").onclick=()=>{$("previewDialog").close();publish(previewId)};
-/* ---------- Localização e eventos globais ---------- */
-function getPos(o){return new Promise((ok,bad)=>navigator.geolocation.getCurrentPosition(ok,bad,o))}
-$("locate").onclick=async()=>{if(!navigator.geolocation){setStatus("Este navegador não suporta localização. Digite a cidade.",true);return}setStatus("Obtendo sua localização...");let pos;
- try{pos=await getPos({enableHighAccuracy:true,timeout:8000,maximumAge:60000})}catch(e){if(e.code===1){setStatus("Permissão de localização negada. Ative a localização para este site.",true);return}
-  try{pos=await getPos({enableHighAccuracy:false,timeout:12000,maximumAge:300000})}catch{setStatus("Não foi possível obter sua localização (abra por https/localhost). Digite a cidade manualmente.",true);return}}
- const lat=pos.coords.latitude,lon=pos.coords.longitude;let label=`${lat.toFixed(5)}, ${lon.toFixed(5)}`;
- try{const d=await getJSON("https://nominatim.openstreetmap.org/reverse?"+new URLSearchParams({format:"jsonv2",lat,lon}),6000),a=d.address||{};const t=[a.suburb||a.neighbourhood,a.city||a.town||a.municipality||a.village,a.state].filter(Boolean).join(", ");if(t)label=t}catch{}
- here={lat,lon,label};$("location").value=label;setStatus("Localização encontrada. Toque em Pesquisar.")};
-$("search").onclick=search;$("location").addEventListener("keydown",e=>{if(e.key==="Enter")search()});
-document.addEventListener("click",e=>{const g=s=>e.target.closest(s);let x;
- if(x=g(".create"))createPlatform(results.find(r=>r.id===x.dataset.id));
- if(x=g("[data-adm]"))openEditor(platforms.find(p=>p.id===x.dataset.adm),"adm");
- if(x=g("[data-edit]"))openEditor(platforms.find(p=>p.id===x.dataset.edit),"edit");
- if(x=g("[data-preview]"))openPreview(x.dataset.preview);
- if(x=g("[data-publish]"))publish(x.dataset.publish);
- if(x=g("[data-admlink]")){const p=platforms.find(p=>p.id===x.dataset.admlink),{url}=shareLink(p,"adm");copy(url);alert("Link do ADM copiado. Quem abrir este link edita esta plataforma no próprio navegador e publica um novo link:\n\n"+url)}
- if(x=g("[data-dl]")){const p=platforms.find(p=>p.id===x.dataset.dl),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([fullDoc(p)],{type:"text/html"}));a.download=(p.name||"site").replace(/[^\w-]+/g,"-")+".html";a.click()}
- if(x=g("[data-del]")){if(confirm("Excluir esta plataforma?")){platforms=platforms.filter(p=>p.id!==x.dataset.del);save()}}
- if(x=g("[data-copy]")){copy(x.dataset.copy);x.textContent="✓ Copiado";setTimeout(()=>x.textContent="Copiar telefone",900)}});
-document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render()});
-/* ---------- Abertura por link: ?site= (página pública) e ?adm= (painel do cliente) ---------- */
-const qs=new URLSearchParams(location.search),siteQ=qs.get("site"),admQ=qs.get("adm");
-if(siteQ){const p=dec(siteQ);if(p){const s=document.querySelector("link[rel=stylesheet]");if(s)s.remove();const pp=norm(p);document.title=pp.title||pp.name;document.head.insertAdjacentHTML("beforeend","<style>"+siteCSS(pp)+"</style>");document.body.innerHTML=siteHTML(pp)}}
-else{renderPlatforms();if(admQ){const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}}}
+
+const TYPE_INFO={
+ restaurant:{label:"Restaurante",queries:["restaurant food","restaurant interior","dish food"],colors:["warm","green"]},
+ pizza:{label:"Pizzaria",queries:["pizza restaurant","pizza close up","pizza oven"],colors:["warm","red"]},
+ barber:{label:"Barbearia",queries:["barbershop","barber haircut","mens haircut"],colors:["black","brown"]},
+ salon:{label:"Salão de beleza",queries:["beauty salon","hair salon","beauty treatment"],colors:["pink","beige"]},
+ shop:{label:"Loja",queries:["retail store","fashion boutique","store products"],colors:["neutral"]},
+ market:{label:"Mercado",queries:["grocery store","fresh produce","market"],colors:["green","yellow"]},
+ pet:{label:"Pet shop / Agro Pet",queries:["pet shop","dog cat pet","pet products"],colors:["green","beige"]},
+ gym:{label:"Academia",queries:["modern gym","fitness training","gym interior"],colors:["black","blue"]},
+ cafe:{label:"Café",queries:["coffee shop","coffee cup","cafe interior"],colors:["brown","beige"]},
+ generic:{label:"Negócio local",queries:["local business","modern storefront","small business"],colors:["neutral"]}
+};
+
+const TYPE_FROM_TEXT=[
+ [/pizz|pizza/i,"pizza"],[/barbear|barber/i,"barber"],[/sal[aã]o|beleza|cabeleire/i,"salon"],
+ [/pet|agro/i,"pet"],[/academia|gym|fitness/i,"gym"],[/caf[eé]/i,"cafe"],[/mercado|supermercado/i,"market"],
+ [/restaurante|lanch|hamburg|comida/i,"restaurant"],[/loja|boutique|moda/i,"shop"]
+];
+
+const SUGGESTIONS={
+ restaurant:[["Prato do dia","Destaque da casa para experimentar.","R$ 00,00"],["Hambúrguer artesanal","Sugestão de item para o cardápio.","R$ 00,00"],["Sobremesa","Sugestão de sobremesa da casa.","R$ 00,00"]],
+ pizza:[["Pizza Margherita","Sugestão de sabor para conferir.","R$ 00,00"],["Pizza da Casa","Sugestão de sabor especial.","R$ 00,00"],["Combo","Pizza + bebida como sugestão.","R$ 00,00"]],
+ barber:[["Corte masculino","Sugestão de serviço para revisar.","R$ 00,00"],["Barba","Sugestão de serviço para revisar.","R$ 00,00"],["Corte + barba","Sugestão de combo.","R$ 00,00"]],
+ salon:[["Corte","Sugestão de serviço para revisar.","R$ 00,00"],["Coloração","Sugestão de serviço para revisar.","R$ 00,00"],["Tratamento","Sugestão de serviço para revisar.","R$ 00,00"]],
+ pet:[["Ração","Sugestão de produto para revisar.","R$ 00,00"],["Petiscos","Sugestão de produto para revisar.","R$ 00,00"],["Acessórios","Sugestão de categoria para revisar.","R$ 00,00"]],
+ shop:[["Produto em destaque","Sugestão de produto para revisar.","R$ 00,00"],["Novidade","Sugestão de item para revisar.","R$ 00,00"],["Mais vendido","Sugestão de item para revisar.","R$ 00,00"]],
+ market:[["Cesta básica","Sugestão de categoria para revisar.","R$ 00,00"],["Produtos frescos","Sugestão de categoria para revisar.","R$ 00,00"],["Ofertas","Sugestão de destaque para revisar.","R$ 00,00"]],
+ gym:[["Musculação","Sugestão de modalidade para revisar.","R$ 00,00"],["Funcional","Sugestão de modalidade para revisar.","R$ 00,00"],["Personal","Sugestão de serviço para revisar.","R$ 00,00"]],
+ cafe:[["Café especial","Sugestão de item para revisar.","R$ 00,00"],["Bolo da casa","Sugestão de item para revisar.","R$ 00,00"],["Combo café","Sugestão de combo para revisar.","R$ 00,00"]],
+ generic:[["Serviço principal","Sugestão para revisar.","R$ 00,00"],["Produto em destaque","Sugestão para revisar.","R$ 00,00"],["Oferta","Sugestão para revisar.","R$ 00,00"]]
+};
+
+const FALLBACK_IMAGES={
+ restaurant:["https://images.unsplash.com/photo-1517248135467-4c7edcad34c4","https://images.unsplash.com/photo-1504674900247-0877df9cc836"],
+ pizza:["https://images.unsplash.com/photo-1574071318508-1cdbab80d002"],
+ barber:["https://images.unsplash.com/photo-1503951914875-452162b0f3f1"],
+ salon:["https://images.unsplash.com/photo-1560066984-138dadb4c035"],
+ shop:["https://images.unsplash.com/photo-1441986300917-64674bd600d8"],
+ market:["https://images.unsplash.com/photo-1542838132-92c53300491e"],
+ pet:["https://images.unsplash.com/photo-1552053831-71594a27632d","https://images.unsplash.com/photo-1517849845537-4d257902454a"],
+ gym:["https://images.unsplash.com/photo-1534438327276-14e5300c3a48"],
+ cafe:["https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb"],
+ generic:["https://images.unsplash.com/photo-1497366811353-6870744d04b2"]
+};
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function uid(){return "p_"+Math.random().toString(36).slice(2,10)}
+function load(){
+ let raw=localStorage.getItem(KEY);
+ if(raw) return JSON.parse(raw);
+ for(const k of OLD_KEYS){raw=localStorage.getItem(k);if(raw){let arr=JSON.parse(raw);localStorage.setItem(KEY,JSON.stringify(arr));return arr}}
+ return [];
+}
+function save(arr){localStorage.setItem(KEY,JSON.stringify(arr))}
+function inferType(p){
+ const text=[p.title,p.name,p.description,p.category].filter(Boolean).join(" ");
+ for(const [rx,t] of TYPE_FROM_TEXT) if(rx.test(text)) return t;
+ return "generic";
+}
+function pickDesign(type){
+ const candidates=DESIGNS.filter(d=>d.types.includes(type));
+ const pool=candidates.length?candidates:DESIGNS;
+ return pool[Math.floor(Math.random()*pool.length)].id;
+}
+function wordmark(name){
+ const parts=String(name||"Seu Negócio").trim().split(/\s+/);
+ if(parts.length>1) return `<b>${esc(parts.slice(0,-1).join(" "))}</b><span>${esc(parts.at(-1))}</span>`;
+ return `<b>${esc(parts[0])}</b><span></span>`;
+}
+function suggestedItems(type){
+ return (SUGGESTIONS[type]||SUGGESTIONS.generic).map((x,i)=>({id:"i"+i,name:x[0],desc:x[1],price:x[2],suggested:true,image:""}));
+}
+function createPlatform(data={}){
+ const p={
+  id:uid(),name:data.name||data.title||"Novo negócio",title:data.title||data.name||"Novo negócio",
+  description:data.description||"Uma presença digital profissional para o seu negócio.",
+  category:data.category||"",address:data.address||"",phone:data.phone||"",whatsapp:data.whatsapp||"",instagram:data.instagram||"",
+  type:data.type||inferType(data),design:pickDesign(data.type||inferType(data)),color:data.color||"",images:[],items:[],
+  published:false,level:data.level||"professional",createdAt:Date.now()
+ };
+ p.items=suggestedItems(p.type); p.images=FALLBACK_IMAGES[p.type]||FALLBACK_IMAGES.generic; return p;
+}
+function current(){return window.__platforms=load()}
+function renderApp(){
+ const params=new URLSearchParams(location.search);
+ if(params.has("site")) return renderPublic(params.get("site"));
+ const arr=current();
+ if(params.has("adm")){const p=arr.find(x=>x.id===params.get("adm")); if(p)return renderADM(p)}
+ renderDashboard(arr);
+}
+function dashboardHeader(){
+ return `<div class="top"><div class="brand"><img src="logo.png"><div>Radar de Clientes<small>Gerador de sites V10</small></div></div><button class="btn" onclick="newPlatform()">+ Criar plataforma</button></div>`;
+}
+function renderDashboard(arr){
+ document.getElementById("app").innerHTML=dashboardHeader()+`<main class="wrap">
+ <div class="card"><h1>Minhas plataformas</h1><p class="muted">Agora cada plataforma pode usar uma estrutura visual diferente.</p></div>
+ <div class="grid" style="margin-top:14px">${arr.length?arr.map(platformCard).join(""):`<div class="card"><h3>Nenhuma plataforma ainda</h3><p class="muted">Crie a primeira e abra o ADM para começar.</p></div>`}</div>
+ </main>`;
+}
+function platformCard(p){
+ const d=DESIGNS.find(x=>x.id===p.design)||DESIGNS[0];
+ return `<div class="card platform-card"><div class="row between"><span class="pill">${esc(TYPE_INFO[p.type]?.label||"Negócio")}</span><span class="pill">${esc(d.name)}</span></div><h3>${esc(p.name)}</h3><p class="muted">${esc(p.description)}</p>
+ <div class="platform-actions"><button class="btn" onclick="openADM('${p.id}')">🔐 ADM</button><button class="btn alt" onclick="openPublic('${p.id}')">🌐 Site</button><button class="btn alt" onclick="editPlatform('${p.id}')">✏️ Editar</button><button class="btn alt" onclick="newAppearance('${p.id}')">🔄 Outra aparência</button><button class="btn danger" onclick="delPlatform('${p.id}')">Excluir</button></div></div>`;
+}
+function newPlatform(){editPlatform(null)}
+function editPlatform(id){
+ const p=id?current().find(x=>x.id===id):createPlatform({});
+ const name=prompt("Nome do negócio:",p.name); if(name===null)return;
+ p.name=p.title=name.trim()||p.name;
+ const cat=prompt("Categoria/tipo do negócio (ex.: pizzaria, barbearia, pet shop):",p.category||TYPE_INFO[p.type]?.label||"");
+ if(cat!==null){p.category=cat;p.type=inferType({...p,category:cat})}
+ const desc=prompt("Descrição curta:",p.description||"");
+ if(desc!==null)p.description=desc;
+ let arr=current(); if(!id)arr.push(p); save(arr); location.href="?adm="+encodeURIComponent(p.id);
+}
+function openADM(id){location.href="?adm="+encodeURIComponent(id)}
+function openPublic(id){location.href="?site="+encodeURIComponent(id)}
+function sharePublic(p){const url=location.origin+location.pathname+"?site="+encodeURIComponent(p.id);navigator.clipboard?.writeText(url);return url}
+function renderADM(p){
+ document.getElementById("app").innerHTML=dashboardHeader()+`<main class="wrap">
+ <div class="card">
+  <div class="row between"><div><span class="pill">🔐 ADM</span><h1 style="margin:8px 0">${esc(p.name)}</h1><p class="muted">Edite o conteúdo e teste novas aparências sem perder os dados.</p></div>
+  <div class="row"><button class="btn" onclick="openPublic('${p.id}')">🌐 Abrir site público</button><button class="btn alt" onclick="copyPublic('${p.id}')">📋 Copiar link</button></div></div>
+  <div class="notice">💡 Produtos e serviços marcados como sugestões devem ser conferidos antes de publicar.</div>
+ </div>
+ <div class="grid" style="margin-top:14px">
+  <div class="card"><h3>🎨 Aparência</h3><p><b>${esc((DESIGNS.find(x=>x.id===p.design)||DESIGNS[0]).name)}</b></p><p class="muted">${esc((DESIGNS.find(x=>x.id===p.design)||DESIGNS[0]).desc)}</p><button class="btn" onclick="newAppearance('${p.id}')">🔄 Gerar outra aparência</button></div>
+  <div class="card"><h3>🖼️ Imagens</h3><p class="muted">Busca preparada para Pexels. Sem chave, usa imagens de fallback.</p><button class="btn alt" onclick="searchImages('${p.id}')">🔎 Buscar novas imagens</button></div>
+  <div class="card"><h3>📝 Dados</h3><button class="btn alt" onclick="editPlatform('${p.id}')">Editar dados principais</button></div>
+ </div>
+ <div class="card" style="margin-top:14px"><h2>Produtos / serviços</h2><div class="grid">${p.items.map((it,i)=>`<div class="card"><span class="pill">${it.suggested?"💡 Sugestão":"Confirmado"}</span><label>Nome</label><input id="n${i}" value="${esc(it.name)}"><label>Descrição</label><textarea id="d${i}">${esc(it.desc)}</textarea><label>Preço</label><input id="pr${i}" value="${esc(it.price)}"><button class="btn" style="margin-top:8px" onclick="saveItem('${p.id}',${i})">Salvar item</button></div>`).join("")}</div></div>
+ <div class="preview" style="margin-top:14px"><iframe src="?site=${encodeURIComponent(p.id)}"></iframe></div>
+ </main>`;
+}
+function copyPublic(id){const p=current().find(x=>x.id===id);const u=sharePublic(p);alert("Link copiado:\\n"+u)}
+function saveItem(id,i){
+ const arr=current(),p=arr.find(x=>x.id===id);p.items[i].name=document.getElementById("n"+i).value;p.items[i].desc=document.getElementById("d"+i).value;p.items[i].price=document.getElementById("pr"+i).value;p.items[i].suggested=false;save(arr);renderADM(p)
+}
+function newAppearance(id){
+ const arr=current(),p=arr.find(x=>x.id===id);const old=p.design;
+ let next=pickDesign(p.type); if(DESIGNS.length>1)while(next===old)next=DESIGNS[Math.floor(Math.random()*DESIGNS.length)].id;
+ p.design=next;
+ // rotate fallback images as a cheap visual variation; Pexels can replace these later.
+ const imgs=FALLBACK_IMAGES[p.type]||FALLBACK_IMAGES.generic;p.images=[...imgs].sort(()=>Math.random()-.5);
+ save(arr);renderADM(p);
+}
+async function searchImages(id){
+ const arr=current(),p=arr.find(x=>x.id===id);
+ const key=localStorage.getItem("pexelsApiKey")||"";
+ if(!key){alert("A busca Pexels está preparada, mas ainda falta configurar a chave da API. O site continua funcionando com imagens de fallback.");return}
+ const info=TYPE_INFO[p.type]||TYPE_INFO.generic;
+ const q=info.queries[Math.floor(Math.random()*info.queries.length)];
+ try{
+  const r=await fetch(PEXELS_ENDPOINT+"?query="+encodeURIComponent(q)+"&per_page=8&orientation=landscape",{headers:{Authorization:key}});
+  if(!r.ok)throw new Error("Pexels: "+r.status);
+  const data=await r.json(); const urls=(data.photos||[]).map(x=>x.src?.large2x||x.src?.large).filter(Boolean);
+  if(urls.length){p.images=urls.slice(0,6);save(arr);renderADM(p);alert("Novas imagens encontradas para "+info.label+"!")}
+  else alert("Não encontramos imagens adequadas nesta busca.");
+ }catch(e){alert("Não foi possível buscar imagens agora. O site continua com as imagens atuais.")}
+}
+function brandColor(p){
+ const map={pizza:"#b42318",restaurant:"#9a3412",barber:"#111827",salon:"#be185d",pet:"#2f6f4e",market:"#3f6212",gym:"#1d4ed8",cafe:"#7c2d12",shop:"#111827",generic:"#111827"};
+ return p.color||map[p.type]||"#111827";
+}
+function img(p,i=0){return esc((p.images&&p.images[i%p.images.length])||FALLBACK_IMAGES[p.type]?.[i%((FALLBACK_IMAGES[p.type]||[]).length)]||FALLBACK_IMAGES.generic[0])}
+function itemCards(p,cls="site-grid"){
+ return `<div class="${cls}">${p.items.map((it,i)=>`<article class="site-card"><img src="${img(p,i)}" alt=""><div class="pad"><h3>${esc(it.name)}</h3><p>${esc(it.desc)}</p><strong>${esc(it.price)}</strong></div></article>`).join("")}</div>`;
+}
+function baseNav(p){return `<nav class="site-nav"><div class="wordmark">${wordmark(p.name)}</div><a class="site-btn" style="background:${brandColor(p)};color:#fff" href="#contato">Contato</a></nav>`}
+function publicHTML(p){
+ const c=brandColor(p),d=p.design||"impacto",hero=img(p,0),info=TYPE_INFO[p.type]||TYPE_INFO.generic;
+ let body="";
+ if(d==="impacto") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><div class="split"><div><div class="pill">${esc(info.label)}</div><h1 class="hero-title">${esc(p.name)}</h1><p class="site-section lead">${esc(p.description)}</p><a class="site-btn" style="background:${c};color:#fff" href="#produtos">Conhecer</a></div><img class="site-hero-img" src="${hero}" alt=""></div></section><section id="produtos" class="site-section"><h2>Destaques</h2>${itemCards(p)}</section></main>`;
+ else if(d==="editorial") body=`${baseNav(p)}<main class="site-main editorial"><section class="site-section"><div class="pill">${esc(info.label)}</div><h1 class="hero-title">${esc(p.name)}</h1><p class="lead">${esc(p.description)}</p><img class="site-hero-img" src="${hero}" alt=""></section><section class="site-section"><h2>O que oferecemos</h2>${itemCards(p)}</section></main>`;
+ else if(d==="bento") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p><div class="bento"><div class="big"><img src="${hero}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:22px"></div><div class="card"><h3>${esc(info.label)}</h3><p>Uma apresentação pensada para este negócio.</p></div><div class="card"><h3>Contato</h3><p>${esc(p.phone||p.whatsapp||"Fale conosco")}</p></div></div></section><section class="site-section"><h2>Destaques</h2>${itemCards(p)}</section></main>`;
+ else if(d==="catalogo") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p></section><section class="site-section"><h2>Catálogo</h2>${itemCards(p,"catalog")}</section></main>`;
+ else if(d==="premium") body=`<div class="dark">${baseNav(p)}<main class="site-main"><section class="site-section"><div class="split"><div><div class="pill">${esc(info.label)}</div><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p><a class="site-btn" style="background:${c};color:#fff" href="#produtos">Descobrir</a></div><img class="site-hero-img" src="${hero}" alt=""></div></section><section id="produtos" class="site-section"><h2>Seleção</h2>${itemCards(p)}</section></main></div>`;
+ else if(d==="bold") body=`<div class="dark">${baseNav(p)}<main class="site-main"><section class="site-section"><h1 class="hero-title">${esc(p.name)}</h1><img class="site-hero-img" src="${hero}" alt=""><p style="font-size:28px">${esc(p.description)}</p></section><section class="site-section"><h2>Destaques</h2>${itemCards(p)}</section></main></div>`;
+ else if(d==="natural") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><div class="split"><img class="site-hero-img" src="${hero}" alt=""><div><div class="pill">Feito para você</div><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p></div></div></section><section class="site-section"><h2>Produtos e serviços</h2>${itemCards(p)}</section></main>`;
+ else if(d==="servicos") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p><img class="site-hero-img" src="${hero}" alt=""></section><section class="site-section"><h2>Serviços</h2>${itemCards(p)}</section></main>`;
+ else if(d==="menu") body=`${baseNav(p)}<main class="site-main"><section class="site-section"><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p><img class="site-hero-img" src="${hero}" alt=""></section><section class="site-section"><h2>Cardápio</h2>${itemCards(p)}</section></main>`;
+ else body=`${baseNav(p)}<main class="site-main"><section class="site-section"><div class="split"><div><h1 class="hero-title">${esc(p.name)}</h1><p>${esc(p.description)}</p><a class="site-btn" style="background:${c};color:#fff" href="#contato">Falar agora</a></div><img class="site-hero-img" src="${hero}" alt=""></div></section><section class="site-section"><h2>Destaques</h2>${itemCards(p)}</section></main>`;
+ return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(p.name)}</title><meta name="description" content="${esc(p.description)}"><link rel="stylesheet" href="${location.pathname}style.css"></head><body><div class="site-shell">${body}<section id="contato" class="site-section"><h2>Contato</h2><p>${esc(p.address||"Atendimento local")}</p><p>${esc(p.phone||p.whatsapp||"Entre em contato")}</p>${p.instagram?`<p>${esc(p.instagram)}</p>`:""}</section><footer class="footer">${esc(p.name)}</footer></div></body></html>`;
+}
+function renderPublic(id){
+ const p=current().find(x=>x.id===id);
+ if(!p){document.getElementById("app").innerHTML="<main class='wrap'><div class='card'><h2>Site não encontrado</h2></div></main>";return}
+ document.open();document.write(publicHTML(p));document.close();
+}
+window.newPlatform=newPlatform;window.editPlatform=editPlatform;window.openADM=openADM;window.openPublic=openPublic;window.copyPublic=copyPublic;window.saveItem=saveItem;window.newAppearance=newAppearance;window.searchImages=searchImages;window.delPlatform=function(id){if(confirm("Excluir esta plataforma?")){save(current().filter(p=>p.id!==id));renderDashboard(current())}};
+renderApp();
