@@ -1,30 +1,26 @@
-RADAR DE CLIENTES — V13
+RADAR DE CLIENTES — V14
 
-V13 mantém a base funcional da V12/V11 e adiciona uma camada de prospecção e criação mais inteligente.
+REGRA PRINCIPAL: V14 evolui a base V12/V11 sem remover/substituir o Designer original e sem retirar funções existentes.
 
-NOVO NA V13
-- Mensagem de WhatsApp personalizada por negócio: o Radar analisa sinais públicos disponíveis, tipo do estabelecimento, presença digital e oportunidades antes de montar uma mensagem curta.
-- A mensagem aparece para revisão/edição antes de abrir o WhatsApp.
-- Múltiplas propostas visuais: o mesmo negócio pode receber 5 direções de design para escolher, sem apagar conteúdo ou funções.
-- O Designer anterior foi preservado; a V13 adiciona as propostas por cima dele.
-- Chat do Designer: pedidos em linguagem natural podem alterar hero/banner, tema, direção visual, tamanho do hero e fonte.
-- Fotos da galeria podem ser usadas pelo chat como fonte de edição, por exemplo: “use a foto da fachada no hero”.
-- Histórico de alterações do chat com desfazer.
-- O Radar continua evitando repetir a mesma imagem quando há alternativas.
+DESIGNER V14
+- 3 propostas visuais diferentes.
+- 4 imagens principais por proposta, com papéis adaptados ao tipo de negócio.
+- Cada quadro pode escolher uma imagem da Galeria.
+- 4 controles diretos: tipografia, formato das imagens, estrutura/layout e estilo visual.
+- Controles avançados originais continuam disponíveis.
+- Nome do negócio continua no wordmark.
 
-MANTIDO
-- Radar de negócios por localização, raio e análise de oportunidade.
-- Localização salva como referência de prospecção e regiões de maior potencial.
-- Criação de plataforma, ADM, prévia, publicação, link público, link ADM e download HTML.
-- Funções por tipo de negócio: cardápio, catálogo, serviços, profissionais, agendamento, reservas, pedidos, entrega, planos, aulas, especialidades, acomodações, orçamento etc.
-- Logo do Radar no canto do aplicativo e marca d’água discreta nos sites gerados.
-- Migração das plataformas anteriores.
+CENTRAL DE SERVIÇOS
+- Redes Sociais
+- WhatsApp Business
+- Fotos comerciais
+- Catálogo/Cardápio
+- Agendamento/Reservas
+- Marketing e Prospecção
+- Projetos salvos localmente e recomendações por negócio.
 
-IMPORTANTE
-- A análise e o chat da V13 são locais/determinísticos nesta versão; não há chave de API de IA exposta no navegador. Uma integração real com um provedor de IA pode ser adicionada futuramente via backend seguro.
-- Conteúdo, preços, horários, profissionais e imagens sugeridos não devem ser tratados como fatos sem conferência.
-- O agendamento/reserva atual continua sendo uma solicitação via WhatsApp; confirmação em tempo real exige backend.
-- Sites publicados continuam funcionando no modelo estático/local da arquitetura anterior.
+PRESERVADO
+Radar, localização, raio, regiões de oportunidade, análise/score, prospecção, confirmação antes do WhatsApp, criação de plataformas, ADM, prévia, publicação, links, download, plataformas salvas, logo.png, funções por tipo e conteúdo sugerido.
 
-V14
-- A Central de Serviços fica propositalmente fora da V13 e será desenvolvida na V14.
+LIMITAÇÃO DA ARQUITETURA ORIGINAL
+A publicação continua no modelo local/URL. Imagens data URL podem não caber em links compartilhados; Baixar HTML é a opção mais segura para levar imagens locais.
