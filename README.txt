@@ -1,34 +1,18 @@
-RADAR DE CLIENTES — V14.3
+RADAR DE CLIENTES — V15
 
-REGRA PRINCIPAL: V14 evolui a base V12/V11 sem remover/substituir o Designer original e sem retirar funções existentes.
+Base: V14.3.2. O Designer, Radar, Central de Projetos e funções anteriores foram preservados.
 
-DESIGNER V14
-- 3 propostas visuais diferentes.
-- 4 imagens principais por proposta, com papéis adaptados ao tipo de negócio.
-- Cada quadro pode escolher uma imagem da Galeria.
-- 4 controles diretos: tipografia, formato das imagens, estrutura/layout e estilo visual.
-- Controles avançados originais continuam disponíveis.
-- Nome do negócio continua no wordmark.
+NOVO: FLUXO COMERCIAL
+Encontrar empresa → Analisar oportunidade → Abordar → Criar demonstração → Cliente vê a prévia → Cliente aprova → Cliente paga → Projeto em produção → Site publicado → Domínio conectado → Manutenção → Renovação.
 
-CENTRAL DE SERVIÇOS
-- Redes Sociais
-- WhatsApp Business
-- Fotos comerciais
-- Catálogo/Cardápio
-- Agendamento/Reservas
-- Marketing e Prospecção
-- Projetos salvos localmente, editáveis e apagáveis pela Central.
+Cada cliente fica salvo no pipeline comercial local para acompanhar a etapa, valor, domínio, serviço e URL publicada.
 
-PRESERVADO
-Radar, localização, raio, regiões de oportunidade, análise/score, prospecção, confirmação antes do WhatsApp, criação de plataformas, ADM, prévia, publicação, links, download, plataformas salvas, logo.png, funções por tipo e conteúdo sugerido.
+BACKEND SEGURO
+- server.js fornece a base para integrações que precisam de segredo.
+- Credenciais nunca devem ficar no app.js.
+- Mercado Pago: definir MP_ACCESS_TOKEN no servidor. O endpoint /api/payment/create cria um checkout e /api/payment/webhook recebe eventos.
+- Cloudflare: definir CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID. O conector de publicação/domínio fica separado do navegador.
+- Domínio: definir DOMAIN_PROVIDER quando o registrador/provedor homologado escolhido estiver definido.
 
-LIMITAÇÃO DA ARQUITETURA ORIGINAL
-A publicação continua no modelo local/URL. Imagens data URL podem não caber em links compartilhados; Baixar HTML é a opção mais segura para levar imagens locais.
-
-
-V14.3.1 — AJUSTES DE ORGANIZAÇÃO
-- “➕ Criar projeto” fica somente no cabeçalho principal.
-- A Central não cria projetos; ela organiza os projetos já salvos.
-- Projetos salvos têm “Editar” e “Apagar”.
-- Ao editar um projeto salvo, seus campos/configurações são carregados novamente.
-- A versão V14.3 fica visível no cabeçalho também em telas pequenas.
+IMPORTANTE
+A interface V15 registra todo o fluxo mesmo sem credenciais. Isso permite testar o produto sem inventar uma integração funcionando. A cobrança e a publicação reais só mudam de modo manual para automático quando as credenciais e o provedor estiverem configurados no backend.
