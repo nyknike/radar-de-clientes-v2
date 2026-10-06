@@ -6,8 +6,38 @@ import path from "node:path";
 const app = express();
 const PORT = process.env.PORT || 10000;
 const ROOT = process.cwd();
-app.use(express.json({limit:"2mb"}));
+app.use(express.json({limit:"25mb"}));
 app.use(express.static(ROOT));
+
+// V15.2: estado comercial persistente no servidor. Em hospedagens efêmeras,
+// configure um disco persistente e DATA_DIR para manter os dados entre deploys.
+const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
+const STATE_FILE = path.join(DATA_DIR, "radar-state.json");
+let state = { sales: [], platforms: [], events: [] };
+function loadState(){
+  try { fs.mkdirSync(DATA_DIR,{recursive:true}); if(fs.existsSync(STATE_FILE)){ const x=JSON.parse(fs.readFileSync(STATE_FILE,"utf8")); state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[]}; } }
+  catch(err){ console.error("Não foi possível carregar o estado persistente:",err.message); }
+}
+async function loadRemoteState(){
+  const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(!url||!key)return;
+  try{
+    const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state?id=eq.1&select=state`,{headers:{apikey:key,Authorization:`Bearer ${key}`,Accept:"application/json"}});
+    if(!r.ok)throw new Error(`Supabase HTTP ${r.status}`);
+    const rows=await r.json(); if(rows[0]?.state){const x=rows[0].state;state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[]};}
+  }catch(err){console.error("Falha ao carregar Supabase; usando arquivo local:",err.message)}
+}
+async function persistState(){
+  const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if(url&&key){
+    try{const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state`,{method:"POST",headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:1,state,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(`Supabase HTTP ${r.status}`);return true;}
+    catch(err){console.error("Falha ao salvar Supabase:",err.message);return false;}
+  }
+  try { fs.mkdirSync(DATA_DIR,{recursive:true}); const tmp=STATE_FILE+".tmp"; fs.writeFileSync(tmp,JSON.stringify(state,null,2)); fs.renameSync(tmp,STATE_FILE); return true; }
+  catch(err){ console.error("Não foi possível salvar o estado persistente:",err.message); return false; }
+}
+loadState();
+const stateReady=loadRemoteState();
 
 const cfg = {
   payment: process.env.MP_ACCESS_TOKEN ? "mercadopago" : "manual",
@@ -15,7 +45,37 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15",integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+
+// O servidor é a fonte compartilhada dos dados entre dispositivos.
+app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
+app.put("/api/state", async (req,res)=>{
+  await stateReady;
+  const body=req.body||{};
+  if(body.sales!==undefined){ if(!Array.isArray(body.sales)) return res.status(400).json({ok:false,error:"sales precisa ser uma lista."}); state.sales=body.sales; }
+  if(body.platforms!==undefined){ if(!Array.isArray(body.platforms)) return res.status(400).json({ok:false,error:"platforms precisa ser uma lista."}); state.platforms=body.platforms; }
+  if(!await persistState()) return res.status(500).json({ok:false,error:"Não foi possível persistir os dados no servidor. Confira a configuração do banco ou disco."});
+  res.json({ok:true,savedAt:new Date().toISOString()});
+});
+app.get("/api/demo/:id", async (req,res)=>{
+  await stateReady;
+  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
+  if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
+  res.json({ok:true,sale,events:state.events.filter(x=>String(x.saleId)===String(sale.id))});
+});
+app.post("/api/demo/:id/event", async (req,res)=>{
+  await stateReady;
+  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
+  if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
+  const event=String(req.body?.event||"");
+  if(!["viewed","approved"].includes(event)) return res.status(400).json({ok:false,error:"Evento inválido."});
+  state.events.push({id:crypto.randomUUID(),saleId:sale.id,event,at:new Date().toISOString()});
+  if(event==="viewed") { sale.demoViewedAt=sale.demoViewedAt||new Date().toISOString(); if(["demo","preview"].includes(sale.stage)) sale.stage="preview"; }
+  if(event==="approved") { sale.approvedAt=new Date().toISOString(); sale.stage="approved"; sale.approvalSource="public-demo"; }
+  sale.updatedAt=new Date().toISOString();
+  if(!await persistState()) return res.status(500).json({ok:false,error:"Não foi possível registrar o evento no armazenamento persistente."});
+  res.json({ok:true,event,sale});
+});
 
 app.post("/api/payment/create", async (req,res)=>{
   try{
@@ -66,4 +126,4 @@ app.post("/api/domain/connect", async (req,res)=>{
   return res.status(501).json({ok:false,error:"O provedor de registro do domínio ainda precisa ser configurado. A conexão do Pages será feita pelo servidor."});
 });
 
-app.listen(PORT,()=>console.log(`Radar backend V15 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V15.2 em http://localhost:${PORT}`));
