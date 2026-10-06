@@ -373,8 +373,6 @@ function dec(x){
   const attempts=[input,decodeURIComponentSafe(input)];
   for(const candidate of attempts){
     try{
-      // URLSearchParams transforma "+" em espaço quando o remetente não
-      // escapou corretamente a URL. Corrigimos isso antes do atob.
       let raw=String(candidate||"").replace(/\s/g,"+").replace(/-/g,"+").replace(/_/g,"/");
       raw=raw.replace(/[^A-Za-z0-9+/=]/g,"");
       while(raw.length%4)raw+="=";
@@ -386,8 +384,37 @@ function dec(x){
   return null;
 }
 function decodeURIComponentSafe(x){try{return decodeURIComponent(x)}catch{return x}}
+function b64url(bytes){let s="";for(const b of bytes)s+=String.fromCharCode(b);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
+function fromB64url(s){let raw=String(s||"").replace(/-/g,"+").replace(/_/g,"/");while(raw.length%4)raw+="=";const bin=atob(raw);return Uint8Array.from(bin,c=>c.charCodeAt(0))}
+async function compressText(text){
+  if(!window.CompressionStream)return null;
+  const cs=new CompressionStream("gzip");
+  const writer=cs.writable.getWriter();writer.write(new TextEncoder().encode(text));writer.close();
+  const buf=await new Response(cs.readable).arrayBuffer();
+  return b64url(new Uint8Array(buf));
+}
+async function decompressText(token){
+  try{
+    if(!window.DecompressionStream)return null;
+    const ds=new DecompressionStream("gzip");
+    const writer=ds.writable.getWriter();writer.write(fromB64url(token));writer.close();
+    const buf=await new Response(ds.readable).arrayBuffer();
+    return new TextDecoder().decode(buf);
+  }catch{return null}
+}
+async function makeCompactSiteLink(p,demoId){
+  const q=JSON.parse(JSON.stringify(p)),n=0;
+  const cut=s=>(s&&s.startsWith("data:"))?"":s;
+  q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);
+  (q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));
+  ["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});
+  const payload=JSON.stringify({p:q,d:demoId||""});
+  const compressed=await compressText(payload);
+  if(compressed)return location.origin+location.pathname+"site/c/"+compressed;
+  return location.origin+location.pathname+"?site="+enc(q)+(demoId?"&demo="+encodeURIComponent(demoId):"");
+}
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
-async function sendDemo(id){const p=platforms.find(x=>String(x.id)===String(id));if(!p){alert("Salve a demonstração antes de enviar.");return}let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;sale.publishedUrl=`${location.origin}${location.pathname}site/${String(sale.id).replace(/-/g,"").slice(0,10)}`;sale.updatedAt=new Date().toISOString();saveSales();const url=sale.publishedUrl;let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;let popup=null;if(number)popup=window.open("about:blank","_blank");const saved=await persistServerState();copy(url);if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.");if(!saved)console.warn("O servidor não confirmou a persistência da demonstração.")}else{if(popup)popup.close();alert("Não há telefone/WhatsApp registrado para este cliente. "+(saved?"O link da demonstração foi copiado.":"Atenção: o servidor não confirmou o salvamento.")+"\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}renderSalesPipeline()}
+async function sendDemo(id){const p=platforms.find(x=>String(x.id)===String(id));if(!p){alert("Salve a demonstração antes de enviar.");return}let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;const url=await makeCompactSiteLink(p,sale.id);sale.publishedUrl=url;sale.updatedAt=new Date().toISOString();saveSales();let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;let popup=null;if(number)popup=window.open("about:blank","_blank");const saved=await persistServerState();copy(url);if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.");if(!saved)console.warn("O servidor não confirmou a persistência da demonstração.")}else{if(popup)popup.close();alert("Não há telefone/WhatsApp registrado para este cliente. "+(saved?"O link da demonstração foi copiado.":"Atenção: o servidor não confirmou o salvamento.")+"\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}renderSalesPipeline()}
 async function refreshDemoStatus(id){try{const r=await fetch(`/api/demo/${encodeURIComponent(id)}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível consultar o servidor.");const i=sales.findIndex(s=>String(s.id)===String(id));if(i>=0){sales[i]={...sales[i],...d.sale};saveSales()}alert(`Demonstração: ${d.sale.demoViewedAt?"visualizada":"ainda não visualizada"}. ${d.sale.approvedAt?"Cliente aprovou.":"Aprovação ainda pendente."}`)}catch(e){alert("Não foi possível atualizar agora. Verifique se o backend está publicado e tente novamente.")}}
 function copy(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
 function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(!p.published){p.published=true;save()}if(sale){sale.stage="published";sale.publishedUrl=shareLink(p,"site").url;sale.updatedAt=new Date().toISOString();saveSales()}const{url,stripped}=shareLink(p,"site");copy(url);
@@ -441,15 +468,17 @@ if(x=g("[data-copy]")){copy(x.dataset.copy);x.textContent="✓ Copiado";setTimeo
 document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render()});
 /* ---------- Links públicos: demonstração limpa /demo/:id, legado ?site= e ADM ?adm= ---------- */
 function renderPublicSite(p,demoId=null){const pp=norm(p);document.title=pp.title||pp.name;document.querySelectorAll('link[rel="stylesheet"]').forEach(x=>x.remove());document.head.insertAdjacentHTML("beforeend","<style>"+siteCSS(pp)+" .demo-approval-bar{position:fixed;z-index:99999;left:12px;right:12px;bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;border:1px solid #6475ff;border-radius:16px;background:#111b2a;color:#f4f7fb;font-family:system-ui,sans-serif;box-shadow:0 8px 32px #0007}.demo-approval-bar p{margin:4px 0;font-size:13px;color:#c4cede}.demo-approval-bar button{border:0;border-radius:10px;background:#6475ff;color:white;font-weight:700;padding:12px 15px}.demo-approval-bar small{color:#b6f0ca}</style>");document.body.innerHTML=siteHTML(pp);if(demoId){const bar=document.createElement("aside");bar.className="demo-approval-bar";bar.innerHTML=`<div><b>Prévia exclusiva para ${esc(pp.name)}</b><p>Este é um projeto de demonstração para avaliação.</p></div><button id="approveDemo">✅ Aprovar demonstração</button><small id="demoFeedback"></small>`;document.body.appendChild(bar);fetch(`/api/demo/${encodeURIComponent(demoId)}/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"viewed"})}).catch(()=>{});bar.querySelector("#approveDemo").onclick=async()=>{if(!confirm("Confirmar que você aprova esta demonstração?"))return;const b=bar.querySelector("#approveDemo");b.disabled=true;try{const r=await fetch(`/api/demo/${encodeURIComponent(demoId)}/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"approved"})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Falha");bar.querySelector("#demoFeedback").textContent="Aprovação registrada. Obrigado!";b.textContent="✅ Aprovado"}catch(e){bar.querySelector("#demoFeedback").textContent="Não foi possível registrar a aprovação agora. Entre em contato com a empresa.";b.disabled=false}}}}
-const qs=new URLSearchParams(location.search),siteQ=qs.get("site"),admQ=qs.get("adm"),demoPath=location.pathname.match(/^\/demo\/([^/]+)\/?$/),sitePath=location.pathname.match(/^\/site\/([^/]+)\/?$/);
+const qs=new URLSearchParams(location.search),siteQ=qs.get("site"),admQ=qs.get("adm"),demoPath=location.pathname.match(/^\/demo\/([^/]+)\/?$/),sitePath=location.pathname.match(/^\/site\/(c\/[^/]+|[^/]+)\/?$/);
 if(siteQ){
-  // Modo público: um link com ?site= NUNCA deve mostrar o painel do Radar.
   document.documentElement.classList.add("public-site-mode");
   const publicSite=dec(siteQ);
-  if(publicSite){
-    renderPublicSite(publicSite,qs.get("demo"));
-  }else{
-    document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site da demonstração indisponível</h1><p>O link do site do cliente foi aberto, mas os dados da demonstração não puderam ser lidos.</p></main>';
-  }
-}else if(sitePath||demoPath){const code=decodeURIComponent((sitePath||demoPath)[1]);fetch(`/api/demo/${encodeURIComponent(code)}`).then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(({ok,data})=>{if(!ok||!data.platform)throw new Error(data.error||"Demonstração não encontrada.");renderPublicSite(data.platform,data.sale.id)}).catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>Este link não foi encontrado ou a demonstração ainda não está disponível.</p></main>'})}
-else{platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms();if(admQ){const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}}}
+  if(publicSite)renderPublicSite(publicSite,qs.get("demo"));
+  else document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site da demonstração indisponível</h1><p>O link antigo não pôde ser lido. Gere uma nova demonstração.</p></main>';
+}else if(sitePath||demoPath){
+  document.documentElement.classList.add("public-site-mode");
+  const code=decodeURIComponent((sitePath||demoPath)[1]);
+  if(code.startsWith("c/")){}
+  else if(code.startsWith("c")){
+    (async()=>{const payload=await decompressText(code.slice(1));if(!payload)throw new Error("compressed-link");const x=JSON.parse(payload);if(!x?.p)throw new Error("invalid-link");renderPublicSite(x.p,x.d||null)})().catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>O link da demonstração não pôde ser lido neste navegador.</p></main>'});
+  }else{fetch(`/api/demo/${encodeURIComponent(code)}`).then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(({ok,data})=>{if(!ok||!data.platform)throw new Error(data.error||"Demonstração não encontrada.");renderPublicSite(data.platform,data.sale.id)}).catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>Este link não foi encontrado ou a demonstração ainda não está disponível.</p></main>'})}
+}else{platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms();if(admQ){const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}}}

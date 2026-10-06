@@ -46,7 +46,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.8",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.9",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -131,7 +131,7 @@ app.post("/api/domain/connect", async (req,res)=>{
 });
 
 // URL pública limpa: mostra o site da demonstração, não o painel do Radar.
-// V15.2.8: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
+// V15.2.9: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
 // O servidor busca a demonstração pelo código curto e o navegador renderiza o site.
 app.get("/site/:id", async (_req,res)=>{
   await stateReady;
@@ -145,4 +145,4 @@ app.get("/demo/:id", async (_req,res)=>{
   res.sendFile(path.join(ROOT,"index.html"));
 });
 app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incompleto. Use o link enviado pelo Radar."));
-app.listen(PORT,()=>console.log(`Radar backend V15.2.7 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V15.2.9 em http://localhost:${PORT}`));
