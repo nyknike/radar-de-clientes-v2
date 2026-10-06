@@ -40,3 +40,10 @@ create table if not exists public.radar_state (
 
 3. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY como variáveis secretas do serviço backend no Render. Nunca coloque a service role key no app.js.
 4. O backend tenta carregar/salvar no Supabase quando as duas variáveis existem; caso contrário usa arquivo local, que pode ser perdido em redeploy/reinicialização do serviço gratuito.
+
+
+CORREÇÃO V15.2 — LINK DE DEMONSTRAÇÃO
+- O botão “Enviar demonstração” agora gera um link limpo /demo/ID que abre o site criado, sem mostrar a interface do Radar.
+- Quando existe telefone/WhatsApp no cadastro, o sistema abre a conversa com uma mensagem e o link da demonstração preenchidos. Você ainda precisa tocar em Enviar no WhatsApp.
+- A página pública registra visualização e permite aprovação explícita.
+- O link /demo/ID exige que a demonstração e o projeto estejam sincronizados com o backend.

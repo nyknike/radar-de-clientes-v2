@@ -61,7 +61,8 @@ app.get("/api/demo/:id", async (req,res)=>{
   await stateReady;
   const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
   if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
-  res.json({ok:true,sale,events:state.events.filter(x=>String(x.saleId)===String(sale.id))});
+  const platform=state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId))||state.platforms.find(x=>String(x.name)===String(sale.name));
+  res.json({ok:true,sale,platform:platform||null,events:state.events.filter(x=>String(x.saleId)===String(sale.id))});
 });
 app.post("/api/demo/:id/event", async (req,res)=>{
   await stateReady;
@@ -126,4 +127,6 @@ app.post("/api/domain/connect", async (req,res)=>{
   return res.status(501).json({ok:false,error:"O provedor de registro do domínio ainda precisa ser configurado. A conexão do Pages será feita pelo servidor."});
 });
 
+// URL pública limpa: mostra o site da demonstração, não o painel do Radar.
+app.get("/demo/:id", (_req,res)=>res.sendFile(path.join(ROOT,"index.html")));
 app.listen(PORT,()=>console.log(`Radar backend V15.2 em http://localhost:${PORT}`));
