@@ -369,15 +369,23 @@ $("edClose").onclick=()=>$("editorDialog").close();
 function renderPlatforms(){$("platforms").innerHTML=platforms.length?platforms.map(p=>`<article class="platform"><div><h3>${esc(p.name)}</h3><span class="chip">${esc(labels[p.type])}</span> <span class="chip">${esc(LEVELS[p.level||"professional"].name)}</span> <span class="chip">${p.published?"Publicada":"Rascunho"}</span></div><p>${esc(p.description||"")}</p><div class="links plat-actions"><button data-adm="${p.id}" class="primary">⚙️ Abrir ADM</button><button data-edit="${p.id}">✏️ Editar dados</button><button data-preview="${p.id}">👁️ Prévia</button><button data-send-demo="${p.id}">📨 Enviar demonstração</button><button data-publish="${p.id}" class="primary">${p.published?"🔗 Copiar link":"🚀 Publicar"}</button>${p.published?`<button data-admlink="${p.id}">🔑 Link do ADM</button><button data-dl="${p.id}">⬇️ Baixar HTML</button>`:""}<button data-del="${p.id}" class="danger">🗑️ Apagar</button></div></article>`).join(""):'<div class="empty">Nenhuma plataforma criada. Use “Criar projeto” em um resultado.</div>'}
 function enc(p){return encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(p)))))}
 function dec(x){
-  try{
-    const raw=decodeURIComponent(String(x||""));
-    const bin=atob(raw.replace(/-/g,"+").replace(/_/g,"/"));
-    const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
-    return JSON.parse(new TextDecoder("utf-8").decode(bytes));
-  }catch(e){
-    try{return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(String(x||""))))))}catch{return null}
+  const input=String(x??"");
+  const attempts=[input,decodeURIComponentSafe(input)];
+  for(const candidate of attempts){
+    try{
+      // URLSearchParams transforma "+" em espaço quando o remetente não
+      // escapou corretamente a URL. Corrigimos isso antes do atob.
+      let raw=String(candidate||"").replace(/\s/g,"+").replace(/-/g,"+").replace(/_/g,"/");
+      raw=raw.replace(/[^A-Za-z0-9+/=]/g,"");
+      while(raw.length%4)raw+="=";
+      const bin=atob(raw);
+      const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+      return JSON.parse(new TextDecoder("utf-8").decode(bytes));
+    }catch(e){}
   }
+  return null;
 }
+function decodeURIComponentSafe(x){try{return decodeURIComponent(x)}catch{return x}}
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
 async function sendDemo(id){const p=platforms.find(x=>String(x.id)===String(id));if(!p){alert("Salve a demonstração antes de enviar.");return}let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;sale.publishedUrl=`${shareLink(p,"site").url}&demo=${encodeURIComponent(sale.id)}`;sale.updatedAt=new Date().toISOString();saveSales();const url=sale.publishedUrl;let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;let popup=null;if(number)popup=window.open("about:blank","_blank");const saved=await persistServerState();copy(url);if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.");if(!saved)console.warn("O servidor não confirmou a persistência da demonstração.")}else{if(popup)popup.close();alert("Não há telefone/WhatsApp registrado para este cliente. "+(saved?"O link da demonstração foi copiado.":"Atenção: o servidor não confirmou o salvamento.")+"\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}renderSalesPipeline()}
 async function refreshDemoStatus(id){try{const r=await fetch(`/api/demo/${encodeURIComponent(id)}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível consultar o servidor.");const i=sales.findIndex(s=>String(s.id)===String(id));if(i>=0){sales[i]={...sales[i],...d.sale};saveSales()}alert(`Demonstração: ${d.sale.demoViewedAt?"visualizada":"ainda não visualizada"}. ${d.sale.approvedAt?"Cliente aprovou.":"Aprovação ainda pendente."}`)}catch(e){alert("Não foi possível atualizar agora. Verifique se o backend está publicado e tente novamente.")}}
