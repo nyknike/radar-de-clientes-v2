@@ -10,7 +10,7 @@ app.use(express.json({limit:"25mb"}));
 app.use((req,res,next)=>{ if(req.path==="/"||req.path==="/index.html"||req.path.startsWith("/demo/")||req.path.endsWith(".js")||req.path.endsWith(".css")){res.setHeader("Cache-Control","no-store, no-cache, must-revalidate, proxy-revalidate");res.setHeader("Pragma","no-cache");res.setHeader("Expires","0");} next(); });
 app.use(express.static(ROOT));
 
-// V15.2.5: estado comercial persistente no servidor. Em hospedagens efêmeras,
+// V15.2.6: estado comercial persistente no servidor. Em hospedagens efêmeras,
 // configure um disco persistente e DATA_DIR para manter os dados entre deploys.
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const STATE_FILE = path.join(DATA_DIR, "radar-state.json");
@@ -46,7 +46,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.6",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -148,4 +148,4 @@ app.get("/demo/:id", async (req,res)=>{
   res.sendFile(path.join(ROOT,"index.html"));
 });
 app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incompleto. Use o link enviado pelo Radar."));
-app.listen(PORT,()=>console.log(`Radar backend V15.2.5 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V15.2.6 em http://localhost:${PORT}`));
