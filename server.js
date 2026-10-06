@@ -46,7 +46,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.7",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.8",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -60,14 +60,16 @@ app.put("/api/state", async (req,res)=>{
 });
 app.get("/api/demo/:id", async (req,res)=>{
   await stateReady;
-  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
+  const code=String(req.params.id);
+  const sale=state.sales.find(x=>String(x.id)===code||String(x.id).replace(/-/g,"").startsWith(code));
   if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
   const platform=state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId))||state.platforms.find(x=>String(x.name)===String(sale.name));
   res.json({ok:true,sale,platform:platform||null,events:state.events.filter(x=>String(x.saleId)===String(sale.id))});
 });
 app.post("/api/demo/:id/event", async (req,res)=>{
   await stateReady;
-  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
+  const code=String(req.params.id);
+  const sale=state.sales.find(x=>String(x.id)===code||String(x.id).replace(/-/g,"").startsWith(code));
   if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
   const event=String(req.body?.event||"");
   if(!["viewed","approved"].includes(event)) return res.status(400).json({ok:false,error:"Evento inválido."});
@@ -129,21 +131,16 @@ app.post("/api/domain/connect", async (req,res)=>{
 });
 
 // URL pública limpa: mostra o site da demonstração, não o painel do Radar.
-app.get("/demo/:id", async (req,res)=>{
+// V15.2.8: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
+// O servidor busca a demonstração pelo código curto e o navegador renderiza o site.
+app.get("/site/:id", async (_req,res)=>{
   await stateReady;
-  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
-  const platform=sale && state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId)||String(x.name)===String(sale.name));
-  if(sale && platform){
-    // Use the self-contained public-site format as a fallback for hosts/proxies that do not route /demo/*.
-    const safe=JSON.parse(JSON.stringify(platform));
-    const strip=v=>(typeof v==="string"&&v.startsWith("data:"))?"":v;
-    safe.banner=strip(safe.banner); safe.gallery=(safe.gallery||[]).map(strip).filter(Boolean);
-    safe.items=(safe.items||[]).map(i=>({...i,img:strip(i.img)}));
-    safe.designImages=(safe.designImages||[]).map(strip).filter(Boolean);
-    (safe.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(strip));
-    const enc=encodeURIComponent(Buffer.from(JSON.stringify(safe),"utf8").toString("base64"));
-    return res.redirect(302,`/?site=${enc}&demo=${encodeURIComponent(sale.id)}`);
-  }
+  res.setHeader("Cache-Control","no-store");
+  res.sendFile(path.join(ROOT,"index.html"));
+});
+
+app.get("/demo/:id", async (_req,res)=>{
+  await stateReady;
   res.setHeader("Cache-Control","no-store");
   res.sendFile(path.join(ROOT,"index.html"));
 });
