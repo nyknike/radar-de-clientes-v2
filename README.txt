@@ -1,4 +1,4 @@
-RADAR DE CLIENTES — V15.2
+RADAR DE CLIENTES — V15.2.5
 
 Base: V14.3.2. O Designer, Radar, Central de Projetos e funções anteriores foram preservados.
 
@@ -18,7 +18,7 @@ IMPORTANTE
 A interface V15 registra todo o fluxo mesmo sem credenciais. Isso permite testar o produto sem inventar uma integração funcionando. A cobrança e a publicação reais só mudam de modo manual para automático quando as credenciais e o provedor estiverem configurados no backend.
 
 
-V15.2 — ASSISTENTE GUIADO E CADASTRO COMERCIAL
+V15.2.5 — ASSISTENTE GUIADO E CADASTRO COMERCIAL
 - A interface do fluxo comercial foi substituída por uma etapa atual de cada vez.
 - O Radar pode selecionar a empresa com melhor pontuação entre os resultados atuais.
 - Demonstrações podem ser enviadas por link; a página registra visita e permite aprovação explícita.
@@ -42,8 +42,19 @@ create table if not exists public.radar_state (
 4. O backend tenta carregar/salvar no Supabase quando as duas variáveis existem; caso contrário usa arquivo local, que pode ser perdido em redeploy/reinicialização do serviço gratuito.
 
 
-CORREÇÃO V15.2 — LINK DE DEMONSTRAÇÃO
+CORREÇÃO V15.2.5 — LINK DE DEMONSTRAÇÃO
 - O botão “Enviar demonstração” agora gera um link limpo /demo/ID que abre o site criado, sem mostrar a interface do Radar.
 - Quando existe telefone/WhatsApp no cadastro, o sistema abre a conversa com uma mensagem e o link da demonstração preenchidos. Você ainda precisa tocar em Enviar no WhatsApp.
 - A página pública registra visualização e permite aprovação explícita.
 - O link /demo/ID exige que a demonstração e o projeto estejam sincronizados com o backend.
+
+
+V15.2.5 — CORREÇÃO DO LINK DE DEMONSTRAÇÃO E IDENTIFICAÇÃO DE VERSÃO
+- A versão exibida no cabeçalho do Radar e no endpoint /api/health agora é V15.2.5.
+- O HTML, CSS e JavaScript usam identificadores de cache V15.2.5 e cabeçalhos sem cache.
+- A rota /demo/:id entrega o index.html para o carregamento da demonstração.
+- IMPORTANTE: publique como serviço Web Node (npm install / npm start), não como Static Site, pois a demonstração depende das rotas /api.
+- Após publicar, confira no topo se aparece V15.2.5. Se continuar mostrando V15.2 ou outra versão, o deploy não está usando estes arquivos.
+
+
+V15.2.5 — Correção do link de demonstração: os links novos usam o formato universal ?site=...&demo=ID, que carrega o site do cliente mesmo em hospedagens que não encaminham /demo/:id. O servidor também redireciona /demo/:id para o formato universal quando consegue recuperar o projeto salvo. O link antigo só poderá ser recuperado se os dados desse projeto ainda estiverem no armazenamento do servidor.

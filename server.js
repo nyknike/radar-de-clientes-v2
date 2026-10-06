@@ -7,9 +7,10 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const ROOT = process.cwd();
 app.use(express.json({limit:"25mb"}));
+app.use((req,res,next)=>{ if(req.path==="/"||req.path==="/index.html"||req.path.startsWith("/demo/")||req.path.endsWith(".js")||req.path.endsWith(".css")){res.setHeader("Cache-Control","no-store, no-cache, must-revalidate, proxy-revalidate");res.setHeader("Pragma","no-cache");res.setHeader("Expires","0");} next(); });
 app.use(express.static(ROOT));
 
-// V15.2: estado comercial persistente no servidor. Em hospedagens efêmeras,
+// V15.2.5: estado comercial persistente no servidor. Em hospedagens efêmeras,
 // configure um disco persistente e DATA_DIR para manter os dados entre deploys.
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const STATE_FILE = path.join(DATA_DIR, "radar-state.json");
@@ -45,7 +46,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.2.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -128,5 +129,23 @@ app.post("/api/domain/connect", async (req,res)=>{
 });
 
 // URL pública limpa: mostra o site da demonstração, não o painel do Radar.
-app.get("/demo/:id", (_req,res)=>res.sendFile(path.join(ROOT,"index.html")));
-app.listen(PORT,()=>console.log(`Radar backend V15.2 em http://localhost:${PORT}`));
+app.get("/demo/:id", async (req,res)=>{
+  await stateReady;
+  const sale=state.sales.find(x=>String(x.id)===String(req.params.id));
+  const platform=sale && state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId)||String(x.name)===String(sale.name));
+  if(sale && platform){
+    // Use the self-contained public-site format as a fallback for hosts/proxies that do not route /demo/*.
+    const safe=JSON.parse(JSON.stringify(platform));
+    const strip=v=>(typeof v==="string"&&v.startsWith("data:"))?"":v;
+    safe.banner=strip(safe.banner); safe.gallery=(safe.gallery||[]).map(strip).filter(Boolean);
+    safe.items=(safe.items||[]).map(i=>({...i,img:strip(i.img)}));
+    safe.designImages=(safe.designImages||[]).map(strip).filter(Boolean);
+    (safe.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(strip));
+    const enc=encodeURIComponent(Buffer.from(JSON.stringify(safe),"utf8").toString("base64"));
+    return res.redirect(302,`/?site=${enc}&demo=${encodeURIComponent(sale.id)}`);
+  }
+  res.setHeader("Cache-Control","no-store");
+  res.sendFile(path.join(ROOT,"index.html"));
+});
+app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incompleto. Use o link enviado pelo Radar."));
+app.listen(PORT,()=>console.log(`Radar backend V15.2.5 em http://localhost:${PORT}`));
