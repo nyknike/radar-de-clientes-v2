@@ -410,7 +410,7 @@ async function makeCompactSiteLink(p,demoId){
   ["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});
   const payload=JSON.stringify({p:q,d:demoId||""});
   const compressed=await compressText(payload);
-  if(compressed)return location.origin+location.pathname+"site/c/"+compressed;
+  if(compressed)return location.origin+(location.pathname.endsWith("/")?location.pathname:location.pathname+"/")+"site/c/"+compressed;
   return location.origin+location.pathname+"?site="+enc(q)+(demoId?"&demo="+encodeURIComponent(demoId):"");
 }
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
@@ -476,9 +476,17 @@ if(siteQ){
   else document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site da demonstração indisponível</h1><p>O link antigo não pôde ser lido. Gere uma nova demonstração.</p></main>';
 }else if(sitePath||demoPath){
   document.documentElement.classList.add("public-site-mode");
-  const code=decodeURIComponent((sitePath||demoPath)[1]);
-  if(code.startsWith("c/")){}
-  else if(code.startsWith("c")){
-    (async()=>{const payload=await decompressText(code.slice(1));if(!payload)throw new Error("compressed-link");const x=JSON.parse(payload);if(!x?.p)throw new Error("invalid-link");renderPublicSite(x.p,x.d||null)})().catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>O link da demonstração não pôde ser lido neste navegador.</p></main>'});
-  }else{fetch(`/api/demo/${encodeURIComponent(code)}`).then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(({ok,data})=>{if(!ok||!data.platform)throw new Error(data.error||"Demonstração não encontrada.");renderPublicSite(data.platform,data.sale.id)}).catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>Este link não foi encontrado ou a demonstração ainda não está disponível.</p></main>'})}
+  const rawCode=decodeURIComponent((sitePath||demoPath)[1]);
+  const compactToken=rawCode.startsWith("c/")?rawCode.slice(2):(rawCode.startsWith("c")?rawCode.slice(1):"");
+  if(compactToken){
+    (async()=>{
+      const payload=await decompressText(compactToken);
+      if(!payload)throw new Error("compressed-link");
+      const x=JSON.parse(payload);
+      if(!x?.p)throw new Error("invalid-link");
+      renderPublicSite(x.p,x.d||null);
+    })().catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site indisponível</h1><p>Não foi possível abrir os dados deste link. Gere uma nova demonstração pelo Radar.</p></main>'});
+  }else{
+    fetch(`/api/demo/${encodeURIComponent(rawCode)}`).then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(({ok,data})=>{if(!ok||!data.platform)throw new Error(data.error||"Demonstração não encontrada.");renderPublicSite(data.platform,data.sale.id)}).catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>Este link antigo não foi encontrado.</p></main>'})
+  }
 }else{platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms();if(admQ){const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}}}
