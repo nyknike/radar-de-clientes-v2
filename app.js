@@ -170,7 +170,13 @@ function norm(p){if(typeof p.items==="string")p.items=p.items.split(/\n+/).filte
 platforms=JSON.parse(localStorage.getItem(KEY)||localStorage.getItem(OLD_KEY)||localStorage.getItem("radarPlatformsV10")||localStorage.getItem("radarPlatformsV9")||localStorage.getItem("radarPlatformsV8")||localStorage.getItem("radarPlatformsV7")||"[]").map(norm); loadSales(); try{const saved=JSON.parse(localStorage.getItem("radarProspectionLocationV14")||"null");if(saved&&saved.lat&&saved.lon)here=saved}catch{}
 function loadSales(){try{sales=JSON.parse(localStorage.getItem(SALES_KEY)||"[]");if(!Array.isArray(sales))sales=[]}catch{sales=[]}}
 async function persistServerState(){
-  try{const r=await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({sales,platforms})});if(!r.ok)throw new Error("server-save-failed");serverSyncReady=true;return true}catch(e){serverSyncReady=false;return false}
+  try{
+    const r=await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({sales,platforms})});
+    if(!r.ok)throw new Error("server-save-failed");
+    const d=await r.json();
+    serverSyncReady=true;
+    return !!d?.ok;
+  }catch(e){serverSyncReady=false;return false}
 }
 async function syncServerState(){
   try{const r=await fetch("/api/state");if(!r.ok)return;const d=await r.json();if(!d?.state)return;const st=d.state;
@@ -407,12 +413,31 @@ async function decompressText(token){
   }catch{return null}
 }
 function makeCompactSiteLink(p,demoId){
-  // V15.3.1: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
+  // V15.3.2: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
   if(!demoId) return publicSiteLinkFor(p);
   return `${location.origin}/site/${encodeURIComponent(String(demoId))}`;
 }
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
-async function sendDemo(id){const p=platforms.find(x=>String(x.id)===String(id));if(!p){alert("Salve a demonstração antes de enviar.");return}let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;const url=await makeCompactSiteLink(p,sale.id);sale.publishedUrl=url;sale.updatedAt=new Date().toISOString();saveSales();let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;let popup=null;if(number)popup=window.open("about:blank","_blank");const saved=await persistServerState();copy(url);if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.");if(!saved)console.warn("O servidor não confirmou a persistência da demonstração.")}else{if(popup)popup.close();alert("Não há telefone/WhatsApp registrado para este cliente. "+(saved?"O link da demonstração foi copiado.":"Atenção: o servidor não confirmou o salvamento.")+"\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}renderSalesPipeline()}
+async function sendDemo(id){
+  const p=platforms.find(x=>String(x.id)===String(id));
+  if(!p){alert("Salve a demonstração antes de enviar.");return}
+  let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);
+  if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}
+  sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;
+  const url=await makeCompactSiteLink(p,sale.id);
+  sale.publishedUrl=url;sale.updatedAt=new Date().toISOString();saveSales();
+  const saved=await persistServerState();
+  if(!saved){
+    alert("Não foi possível confirmar o salvamento do site no servidor. O link não será enviado, porque ele poderia funcionar apenas neste navegador/instância. Configure o armazenamento persistente do Render (ex.: Supabase) e tente novamente.");
+    return;
+  }
+  let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;
+  const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;
+  let popup=null;if(number)popup=window.open("about:blank","_blank");copy(url);
+  if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva no servidor e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.")}
+  else{if(popup)popup.close();alert("A demonstração foi salva no servidor e o link foi copiado.\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}
+  renderSalesPipeline();
+}
 async function refreshDemoStatus(id){try{const r=await fetch(`/api/demo/${encodeURIComponent(id)}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível consultar o servidor.");const i=sales.findIndex(s=>String(s.id)===String(id));if(i>=0){sales[i]={...sales[i],...d.sale};saveSales()}alert(`Demonstração: ${d.sale.demoViewedAt?"visualizada":"ainda não visualizada"}. ${d.sale.approvedAt?"Cliente aprovou.":"Aprovação ainda pendente."}`)}catch(e){alert("Não foi possível atualizar agora. Verifique se o backend está publicado e tente novamente.")}}
 function copy(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
 function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(!p.published){p.published=true;save()}if(sale){sale.stage="published";sale.publishedUrl=publicSiteLinkFor(p);sale.updatedAt=new Date().toISOString();saveSales()}const url=publicSiteLinkFor(p);copy(url);
@@ -469,11 +494,11 @@ function renderPublicSite(p,demoId=null){const pp=norm(p);document.title=pp.titl
 async function openServerSite(id,isDemo){
   try{
     const r=await fetch(`/api/site/${encodeURIComponent(id)}${isDemo?"?demo=1":""}`,{cache:"no-store"});
-    const d=await r.json();
-    if(!r.ok||!d?.platform)throw new Error(d?.error||"Site não encontrado.");
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!d?.platform)throw new Error(d?.error||`Servidor HTTP ${r.status}`);
     renderPublicSite(d.platform,isDemo?d.sale?.id:null);
   }catch(e){
-    document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site indisponível</h1><p>Este link não corresponde a um site publicado ou demonstração válida.</p></main>';
+    document.body.innerHTML=`<main style="font:16px system-ui;padding:32px;max-width:760px;margin:auto"><h1>Site indisponível</h1><p>O endereço existe, mas o projeto não foi localizado no armazenamento público do Radar.</p><p style="opacity:.7">Detalhe: ${esc(String(e.message||e))}</p></main>`;
   }
 }
 const qs=new URLSearchParams(location.search),admQ=qs.get("adm"),sitePath=location.pathname.match(/^\/site\/(p\/)?([^/]+)\/?$/);
