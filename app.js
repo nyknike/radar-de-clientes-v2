@@ -324,15 +324,19 @@ const inp=(path,label,type="text",ph="")=>`<label>${label}<input type="${type}" 
 const sel=(path,label,opts)=>`<label>${label}<select data-p="${path}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(getP(ed,path))===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
 const mini=(path,ph)=>`<input data-p="${path}" placeholder="${ph}" value="${esc(getP(ed,path)||"")}">`;
 function openEditor(p,mode){ed=JSON.parse(JSON.stringify(p));edMode=mode;tab=mode==="adm"?"funcoes":"dados";$("edTitle").textContent=mode==="adm"?"ADM — "+p.name:mode==="create"?"Criar site — "+p.name:"Editar — "+p.name;renderTab();$("editorDialog").showModal()}
+function publicSiteLinkFor(p){
+ if(!p||!p.id)return "";
+ return `${location.origin}/site/p/${encodeURIComponent(String(p.id))}`;
+}
 function demoLinkFor(p){
  const sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||String(s.businessId)===String(p.id)||s.name===p.name);
  if(!sale||!sale.id)return "";
- // Fallback universal: o site é renderizado a partir de ?site= mesmo quando o host não encaminha /demo/:id.
- return `${shareLink(p,"site").url}&demo=${encodeURIComponent(sale.id)}`;
+ // Link público curto: os dados ficam no servidor, nunca dentro de uma URL gigante.
+ return `${location.origin}/site/${encodeURIComponent(String(sale.id))}`;
 }
 function publicLinkFor(p){
  const demo=demoLinkFor(p);
- return demo || shareLink(p,"site").url;
+ return demo || publicSiteLinkFor(p);
 }
 function admHeader(){const demo=demoLinkFor(ed);const pub=publicLinkFor(ed);return `<div class="adm-top"><div><span class="eyebrow-ui">🔐 ADM V9</span><strong>${esc(ed.name)}</strong><small>Edite e publique o site do cliente.</small></div><div class="adm-links">${demo?`<a class="primary" href="${esc(demo)}" target="_blank">👁️ Abrir demonstração</a><button type="button" data-act="send-demo">📨 Enviar ao cliente</button>`:`<a class="primary" href="${esc(pub)}" target="_blank">🌐 Abrir site público</a>`}<button type="button" data-act="copy-public">📋 Copiar ${demo?"link da demonstração":"link público"}</button></div></div>`}
 function renderTab(){const T=TPL[tplKey(ed.type)];$("tabs").innerHTML=[["dados","① Informações"],["funcoes","② Funções"],["conteudo","③ Conteúdo"],["design","④ Visual"],["previa","⑤ Prévia"]].map(([k,v])=>`<button type="button" data-act="tab" data-v="${k}" class="${k===tab?"active":""}">${v}</button>`).join("");$("edBody").innerHTML=(edMode==="adm"?admHeader():"")+({dados:tabDados,funcoes:tabFuncoes,conteudo:tabConteudo,design:tabDesign,previa:tabPrevia})[tab]();if(tab==="previa")drawFrame()}
@@ -402,23 +406,17 @@ async function decompressText(token){
     return new TextDecoder().decode(buf);
   }catch{return null}
 }
-async function makeCompactSiteLink(p,demoId){
-  const q=JSON.parse(JSON.stringify(p)),n=0;
-  const cut=s=>(s&&s.startsWith("data:"))?"":s;
-  q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);
-  (q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));
-  ["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});
-  const payload=JSON.stringify({p:q,d:demoId||""});
-  const compressed=await compressText(payload);
-  if(compressed)return location.origin+(location.pathname.endsWith("/")?location.pathname:location.pathname+"/")+"site/c/"+compressed;
-  return location.origin+location.pathname+"?site="+enc(q)+(demoId?"&demo="+encodeURIComponent(demoId):"");
+function makeCompactSiteLink(p,demoId){
+  // V15.3.1: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
+  if(!demoId) return publicSiteLinkFor(p);
+  return `${location.origin}/site/${encodeURIComponent(String(demoId))}`;
 }
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
 async function sendDemo(id){const p=platforms.find(x=>String(x.id)===String(id));if(!p){alert("Salve a demonstração antes de enviar.");return}let sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||s.name===p.name);if(!sale){sale={id:crypto.randomUUID(),name:p.name,type:p.type,phone:p.phone,whatsapp:p.whatsapp,stage:"demo",createdAt:new Date().toISOString(),service:"Site profissional",price:0,paymentStatus:"pending"};sales.push(sale)}sale.platformId=p.id;sale.businessId=p.id;sale.name=p.name;sale.type=p.type;sale.phone=sale.phone||p.phone;sale.whatsapp=sale.whatsapp||p.whatsapp;sale.stage="preview";sale.demoSentAt=new Date().toISOString();sale.demoViewedAt=null;sale.approvedAt=null;const url=await makeCompactSiteLink(p,sale.id);sale.publishedUrl=url;sale.updatedAt=new Date().toISOString();saveSales();let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;const message=`Olá! Preparei uma demonstração personalizada para ${p.name}. Você pode visualizar o site neste link: ${url}\n\nQuando puder, veja a proposta e me diga o que achou. O botão de aprovação fica na própria página.`;let popup=null;if(number)popup=window.open("about:blank","_blank");const saved=await persistServerState();copy(url);if(number){const waUrl=`https://wa.me/${number}?text=${encodeURIComponent(message)}`;if(popup)popup.location.href=waUrl;else location.href=waUrl;if(popup)alert("A demonstração foi salva e o WhatsApp foi aberto com a mensagem e o link do site criado. Confira a conversa e toque em Enviar.");if(!saved)console.warn("O servidor não confirmou a persistência da demonstração.")}else{if(popup)popup.close();alert("Não há telefone/WhatsApp registrado para este cliente. "+(saved?"O link da demonstração foi copiado.":"Atenção: o servidor não confirmou o salvamento.")+"\n\nLink da demonstração: "+url+"\n\nMensagem sugerida:\n"+message)}renderSalesPipeline()}
 async function refreshDemoStatus(id){try{const r=await fetch(`/api/demo/${encodeURIComponent(id)}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível consultar o servidor.");const i=sales.findIndex(s=>String(s.id)===String(id));if(i>=0){sales[i]={...sales[i],...d.sale};saveSales()}alert(`Demonstração: ${d.sale.demoViewedAt?"visualizada":"ainda não visualizada"}. ${d.sale.approvedAt?"Cliente aprovou.":"Aprovação ainda pendente."}`)}catch(e){alert("Não foi possível atualizar agora. Verifique se o backend está publicado e tente novamente.")}}
 function copy(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
-function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(!p.published){p.published=true;save()}if(sale){sale.stage="published";sale.publishedUrl=shareLink(p,"site").url;sale.updatedAt=new Date().toISOString();saveSales()}const{url,stripped}=shareLink(p,"site");copy(url);
- alert("Plataforma publicada. Link copiado (quando o navegador permite):\n\n"+url+(stripped?`\n\nAtenção: ${stripped} imagem(ns) enviada(s) do computador não cabem no link. Use URLs de imagem ou “Baixar HTML” para levar tudo.`:"")+(url.length>8000?"\n\nO link ficou longo; se algum app cortar, use “Baixar HTML”.":""))}
+function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(!p.published){p.published=true;save()}if(sale){sale.stage="published";sale.publishedUrl=publicSiteLinkFor(p);sale.updatedAt=new Date().toISOString();saveSales()}const url=publicSiteLinkFor(p);copy(url);
+ alert("Plataforma publicada. Link público copiado (quando o navegador permite):\n\n"+url)}
 function openPreview(id){const p=platforms.find(x=>x.id===id);if(!p)return;previewId=id;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(sale&&stageIndex(sale.stage)<stageIndex("preview"))advanceSale(sale.id,"preview");drawPreview();$("previewDialog").showModal()}
 function drawPreview(){const p=platforms.find(x=>x.id===previewId);$("pvFrame").style.width=dev==="mobile"?"390px":"100%";$("pvFrame").srcdoc=fullDoc(p)}
 document.querySelectorAll("[data-dev]").forEach(b=>b.onclick=()=>{dev=b.dataset.dev;drawPreview()});
@@ -466,27 +464,23 @@ if(x=g("[data-sale-refresh]")){renderSalesPipeline();return}
 if(x=g("[data-copy]")){copy(x.dataset.copy);x.textContent="✓ Copiado";setTimeout(()=>x.textContent="Copiar telefone",900);return}
 });
 document.querySelectorAll("[data-filter]").forEach(b=>b.onclick=()=>{filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));render()});
-/* ---------- Links públicos: demonstração limpa /demo/:id, legado ?site= e ADM ?adm= ---------- */
+/* ---------- Links públicos: rota curta /site/:id ---------- */
 function renderPublicSite(p,demoId=null){const pp=norm(p);document.title=pp.title||pp.name;document.querySelectorAll('link[rel="stylesheet"]').forEach(x=>x.remove());document.head.insertAdjacentHTML("beforeend","<style>"+siteCSS(pp)+" .demo-approval-bar{position:fixed;z-index:99999;left:12px;right:12px;bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px;border:1px solid #6475ff;border-radius:16px;background:#111b2a;color:#f4f7fb;font-family:system-ui,sans-serif;box-shadow:0 8px 32px #0007}.demo-approval-bar p{margin:4px 0;font-size:13px;color:#c4cede}.demo-approval-bar button{border:0;border-radius:10px;background:#6475ff;color:white;font-weight:700;padding:12px 15px}.demo-approval-bar small{color:#b6f0ca}</style>");document.body.innerHTML=siteHTML(pp);if(demoId){const bar=document.createElement("aside");bar.className="demo-approval-bar";bar.innerHTML=`<div><b>Prévia exclusiva para ${esc(pp.name)}</b><p>Este é um projeto de demonstração para avaliação.</p></div><button id="approveDemo">✅ Aprovar demonstração</button><small id="demoFeedback"></small>`;document.body.appendChild(bar);fetch(`/api/demo/${encodeURIComponent(demoId)}/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"viewed"})}).catch(()=>{});bar.querySelector("#approveDemo").onclick=async()=>{if(!confirm("Confirmar que você aprova esta demonstração?"))return;const b=bar.querySelector("#approveDemo");b.disabled=true;try{const r=await fetch(`/api/demo/${encodeURIComponent(demoId)}/event`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:"approved"})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Falha");bar.querySelector("#demoFeedback").textContent="Aprovação registrada. Obrigado!";b.textContent="✅ Aprovado"}catch(e){bar.querySelector("#demoFeedback").textContent="Não foi possível registrar a aprovação agora. Entre em contato com a empresa.";b.disabled=false}}}}
-const qs=new URLSearchParams(location.search),siteQ=qs.get("site"),admQ=qs.get("adm"),demoPath=location.pathname.match(/^\/demo\/([^/]+)\/?$/),sitePath=location.pathname.match(/^\/site\/(c\/[^/]+|[^/]+)\/?$/);
-if(siteQ){
-  document.documentElement.classList.add("public-site-mode");
-  const publicSite=dec(siteQ);
-  if(publicSite)renderPublicSite(publicSite,qs.get("demo"));
-  else document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site da demonstração indisponível</h1><p>O link antigo não pôde ser lido. Gere uma nova demonstração.</p></main>';
-}else if(sitePath||demoPath){
-  document.documentElement.classList.add("public-site-mode");
-  const rawCode=decodeURIComponent((sitePath||demoPath)[1]);
-  const compactToken=rawCode.startsWith("c/")?rawCode.slice(2):(rawCode.startsWith("c")?rawCode.slice(1):"");
-  if(compactToken){
-    (async()=>{
-      const payload=await decompressText(compactToken);
-      if(!payload)throw new Error("compressed-link");
-      const x=JSON.parse(payload);
-      if(!x?.p)throw new Error("invalid-link");
-      renderPublicSite(x.p,x.d||null);
-    })().catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site indisponível</h1><p>Não foi possível abrir os dados deste link. Gere uma nova demonstração pelo Radar.</p></main>'});
-  }else{
-    fetch(`/api/demo/${encodeURIComponent(rawCode)}`).then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(({ok,data})=>{if(!ok||!data.platform)throw new Error(data.error||"Demonstração não encontrada.");renderPublicSite(data.platform,data.sale.id)}).catch(()=>{document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Demonstração indisponível</h1><p>Este link antigo não foi encontrado.</p></main>'})
+async function openServerSite(id,isDemo){
+  try{
+    const r=await fetch(`/api/site/${encodeURIComponent(id)}${isDemo?"?demo=1":""}`,{cache:"no-store"});
+    const d=await r.json();
+    if(!r.ok||!d?.platform)throw new Error(d?.error||"Site não encontrado.");
+    renderPublicSite(d.platform,isDemo?d.sale?.id:null);
+  }catch(e){
+    document.body.innerHTML='<main style="font:16px system-ui;padding:32px"><h1>Site indisponível</h1><p>Este link não corresponde a um site publicado ou demonstração válida.</p></main>';
   }
-}else{platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms();if(admQ){const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}}}
+}
+const qs=new URLSearchParams(location.search),admQ=qs.get("adm"),sitePath=location.pathname.match(/^\/site\/(p\/)?([^/]+)\/?$/);
+if(sitePath){
+  document.documentElement.classList.add("public-site-mode");
+  openServerSite(decodeURIComponent(sitePath[2]),!sitePath[1]);
+}else if(admQ){
+  platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms();
+  const p=dec(admQ);if(p){const pp=norm(p),i=platforms.findIndex(x=>x.id===pp.id);if(i<0)platforms.push(pp);save();openEditor(i<0?pp:platforms[i],"adm")}
+}else{platforms=platforms.map(x=>norm(x));localStorage.setItem(KEY,JSON.stringify(platforms));renderPlatforms()}

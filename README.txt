@@ -57,4 +57,4 @@ V15.2.5 — CORREÇÃO DO LINK DE DEMONSTRAÇÃO E IDENTIFICAÇÃO DE VERSÃO
 - Após publicar, confira no topo se aparece V15.2.5. Se continuar mostrando V15.2 ou outra versão, o deploy não está usando estes arquivos.
 
 
-V15.2.5 — Correção do link de demonstração: os links novos usam o formato universal ?site=...&demo=ID, que carrega o site do cliente mesmo em hospedagens que não encaminham /demo/:id. O servidor também redireciona /demo/:id para o formato universal quando consegue recuperar o projeto salvo. O link antigo só poderá ser recuperado se os dados desse projeto ainda estiverem no armazenamento do servidor.
+V15.3.1 — Correção definitiva dos links públicos: as demonstrações usam URLs curtas no formato /site/ID e o conteúdo é recuperado pelo servidor. Não há mais dados do site codificados em ?site=... na URL. /demo/:id antigo redireciona para a rota curta quando usado.
