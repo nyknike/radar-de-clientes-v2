@@ -178,6 +178,16 @@ async function persistServerState(){
     return !!d?.ok;
   }catch(e){serverSyncReady=false;return false}
 }
+async function publishPublicRegistry(p){
+  if(!p?.id)return false;
+  try{
+    const r=await fetch(`/api/public-sites/${encodeURIComponent(String(p.id))}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({platform:norm(JSON.parse(JSON.stringify(p)))})});
+    if(!r.ok)return false;
+    const check=await fetch(`/api/site/${encodeURIComponent(String(p.id))}`,{cache:"no-store"});
+    const d=await check.json().catch(()=>({}));
+    return check.ok&&!!d?.platform;
+  }catch{return false}
+}
 async function syncServerState(){
   try{const r=await fetch("/api/state");if(!r.ok)return;const d=await r.json();if(!d?.state)return;const st=d.state;
     if(Array.isArray(st.sales)&&st.sales.length){const byId=new Map(sales.map(x=>[String(x.id),x]));st.sales.forEach(x=>byId.set(String(x.id),x));sales=[...byId.values()]}
@@ -416,7 +426,7 @@ async function decompressText(token){
   }catch{return null}
 }
 function makeCompactSiteLink(p,demoId){
-  // V15.3.3: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
+  // V15.3.4: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
   if(!demoId) return publicSiteLinkFor(p);
   return `${location.origin}/site/${encodeURIComponent(String(demoId))}`;
 }
@@ -443,8 +453,16 @@ async function sendDemo(id){
 }
 async function refreshDemoStatus(id){try{const r=await fetch(`/api/demo/${encodeURIComponent(id)}`);const d=await r.json();if(!r.ok)throw new Error(d.error||"Não foi possível consultar o servidor.");const i=sales.findIndex(s=>String(s.id)===String(id));if(i>=0){sales[i]={...sales[i],...d.sale};saveSales()}alert(`Demonstração: ${d.sale.demoViewedAt?"visualizada":"ainda não visualizada"}. ${d.sale.approvedAt?"Cliente aprovou.":"Aprovação ainda pendente."}`)}catch(e){alert("Não foi possível atualizar agora. Verifique se o backend está publicado e tente novamente.")}}
 function copy(t){if(navigator.clipboard)navigator.clipboard.writeText(t).catch(()=>{})}
-function publish(id){const p=platforms.find(x=>x.id===id);if(!p)return;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(!p.published){p.published=true;save()}if(sale){sale.stage="published";sale.publishedUrl=publicSiteLinkFor(p);sale.updatedAt=new Date().toISOString();saveSales()}const url=publicSiteLinkFor(p);copy(url);
- alert("Plataforma publicada. Link público copiado (quando o navegador permite):\n\n"+url)}
+async function publish(id){
+ const p=platforms.find(x=>x.id===id);if(!p)return false;
+ if(!p.published){p.published=true;save()}
+ const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);
+ if(sale){sale.stage="published";sale.publishedUrl=publicSiteLinkFor(p);sale.updatedAt=new Date().toISOString();saveSales()}
+ setStatus("Publicando site no servidor...");
+ const ok=await publishPublicRegistry(p);
+ if(!ok){setStatus("Publicação pública não confirmada. O link não foi copiado.",true);alert("O servidor não confirmou este site público. O link NÃO foi copiado para evitar Not Found. Verifique o deploy e tente publicar novamente.");return false}
+ const url=publicSiteLinkFor(p);copy(url);setStatus("Site público confirmado e link copiado.");alert("Site público confirmado no servidor!\n\n"+url);return true
+}
 function openPreview(id){const p=platforms.find(x=>x.id===id);if(!p)return;previewId=id;const sale=sales.find(s=>String(s.businessId)===String(p.id)||s.name===p.name);if(sale&&stageIndex(sale.stage)<stageIndex("preview"))advanceSale(sale.id,"preview");drawPreview();$("previewDialog").showModal()}
 function drawPreview(){const p=platforms.find(x=>x.id===previewId);$("pvFrame").style.width=dev==="mobile"?"390px":"100%";$("pvFrame").srcdoc=fullDoc(p)}
 document.querySelectorAll("[data-dev]").forEach(b=>b.onclick=()=>{dev=b.dataset.dev;drawPreview()});

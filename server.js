@@ -13,9 +13,9 @@ app.use((req,res,next)=>{ if(req.path==="/"||req.path==="/index.html"||(req.path
 // configure um disco persistente e DATA_DIR para manter os dados entre deploys.
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const STATE_FILE = path.join(DATA_DIR, "radar-state.json");
-let state = { sales: [], platforms: [], events: [] };
+let state = { sales: [], platforms: [], events: [], publishedSites: [] };
 function loadState(){
-  try { fs.mkdirSync(DATA_DIR,{recursive:true}); if(fs.existsSync(STATE_FILE)){ const x=JSON.parse(fs.readFileSync(STATE_FILE,"utf8")); state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[]}; } }
+  try { fs.mkdirSync(DATA_DIR,{recursive:true}); if(fs.existsSync(STATE_FILE)){ const x=JSON.parse(fs.readFileSync(STATE_FILE,"utf8")); state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[],publishedSites:Array.isArray(x.publishedSites)?x.publishedSites:[]}; } }
   catch(err){ console.error("Não foi possível carregar o estado persistente:",err.message); }
 }
 async function loadRemoteState(){
@@ -24,7 +24,7 @@ async function loadRemoteState(){
   try{
     const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state?id=eq.1&select=state`,{headers:{apikey:key,Authorization:`Bearer ${key}`,Accept:"application/json"}});
     if(!r.ok)throw new Error(`Supabase HTTP ${r.status}`);
-    const rows=await r.json(); if(rows[0]?.state){const x=rows[0].state;state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[]};}
+    const rows=await r.json(); if(rows[0]?.state){const x=rows[0].state;state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[],publishedSites:Array.isArray(x.publishedSites)?x.publishedSites:[]};}
   }catch(err){console.error("Falha ao carregar Supabase; usando arquivo local:",err.message)}
 }
 async function persistState(){
@@ -45,7 +45,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.3.3",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.3.4",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -71,7 +71,8 @@ app.get("/api/site/:id", async (req,res)=>{
   res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
   const id=String(req.params.id||"").trim();
   if(!id) return res.status(400).json({ok:false,error:"ID do site obrigatório."});
-  // V15.3.3: resolução pública exata. Nunca depende de localStorage do navegador.
+  const published=state.publishedSites.find(x=>String(x.id)===id);
+  if(published?.platform) return res.json({ok:true,kind:"published",platform:published.platform,sale:null});
   const sale=state.sales.find(x=>String(x.id)===id);
   if(sale){
     const platform=state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId));
@@ -79,13 +80,26 @@ app.get("/api/site/:id", async (req,res)=>{
     return res.json({ok:true,kind:"demo",platform,sale});
   }
   const platform=state.platforms.find(x=>String(x.id)===id);
-  if(!platform) return res.status(404).json({ok:false,error:"Site não encontrado no armazenamento do servidor."});
+  if(!platform) return res.status(404).json({ok:false,error:"Site não encontrado no armazenamento público do servidor."});
   res.json({ok:true,kind:"published",platform,sale:null});
+});
+
+app.put("/api/public-sites/:id", async (req,res)=>{
+  await stateReady;
+  const id=String(req.params.id||"").trim(), platform=req.body?.platform;
+  if(!id||!platform||String(platform.id)!==id) return res.status(400).json({ok:false,error:"Dados do site público inválidos."});
+  const item={id,platform,updatedAt:new Date().toISOString()};
+  const i=state.publishedSites.findIndex(x=>String(x.id)===id);
+  if(i<0) state.publishedSites.push(item); else state.publishedSites[i]=item;
+  const pi=state.platforms.findIndex(x=>String(x.id)===id);
+  if(pi<0) state.platforms.push(platform); else state.platforms[pi]=platform;
+  if(!await persistState()) return res.status(500).json({ok:false,error:"Não foi possível salvar o site público no servidor."});
+  res.json({ok:true,id,updatedAt:item.updatedAt});
 });
 
 app.get("/api/public-status", async (_req,res)=>{
   await stateReady;
-  res.json({ok:true,version:"V15.3.3",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),sales:state.sales.length,platforms:state.platforms.length});
+  res.json({ok:true,version:"V15.3.4",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),sales:state.sales.length,platforms:state.platforms.length,publishedSites:state.publishedSites.length});
 });
 
 app.post("/api/demo/:id/event", async (req,res)=>{
@@ -153,7 +167,7 @@ app.post("/api/domain/connect", async (req,res)=>{
 });
 
 // URL pública limpa: mostra o site da demonstração, não o painel do Radar.
-// V15.3.3: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
+// V15.3.4: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
 // O servidor busca a demonstração pelo código curto e o navegador renderiza o site.
 app.get("/site/p/:id", (_req,res)=>{
   res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
@@ -175,4 +189,4 @@ app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incomp
 // IMPORTANTE: as rotas públicas vêm antes dos arquivos estáticos.
 // Assim /site/ID sempre entrega o shell do Radar, que então consulta /api/site/ID.
 app.use(express.static(ROOT));
-app.listen(PORT,()=>console.log(`Radar backend V15.3.3 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V15.3.4 em http://localhost:${PORT}`));
