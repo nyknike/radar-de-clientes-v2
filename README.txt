@@ -61,3 +61,6 @@ V15.3.3 — Correção definitiva dos links públicos: as demonstrações usam U
 
 
 V15.3.3 — Link público reconstruído: /site/ID e /site/p/ID não dependem de localStorage; o envio da demonstração só confirma o link após persistência no servidor. Adicionado /api/public-status e resolução exata por ID.
+
+
+V15.3.5 — Link público canônico: abrir, copiar e enviar usam /site/ID do próprio projeto. O servidor associa a demonstração ao ID do projeto e mantém compatibilidade com links antigos de venda.

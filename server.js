@@ -45,7 +45,7 @@ const cfg = {
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.3.4",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.3.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
 app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
@@ -71,11 +71,18 @@ app.get("/api/site/:id", async (req,res)=>{
   res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
   const id=String(req.params.id||"").trim();
   if(!id) return res.status(400).json({ok:false,error:"ID do site obrigatório."});
+  // Primeiro resolvemos o ID do próprio projeto publicado. Se houver uma venda
+  // vinculada, devolvemos a venda também para preservar a barra de aprovação.
   const published=state.publishedSites.find(x=>String(x.id)===id);
-  if(published?.platform) return res.json({ok:true,kind:"published",platform:published.platform,sale:null});
+  if(published?.platform){
+    const sale=state.sales.find(x=>String(x.platformId||x.businessId)===id||String(x.businessId)===id)||null;
+    return res.json({ok:true,kind:sale?"demo":"published",platform:published.platform,sale});
+  }
+  // Compatibilidade com links antigos que usavam o ID da venda.
   const sale=state.sales.find(x=>String(x.id)===id);
   if(sale){
-    const platform=state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId));
+    const platform=state.publishedSites.find(x=>String(x.id)===String(sale.platformId||sale.businessId))?.platform
+      ||state.platforms.find(x=>String(x.id)===String(sale.platformId||sale.businessId));
     if(!platform) return res.status(404).json({ok:false,error:"A demonstração existe, mas o projeto do site não foi encontrado no servidor."});
     return res.json({ok:true,kind:"demo",platform,sale});
   }
@@ -99,7 +106,7 @@ app.put("/api/public-sites/:id", async (req,res)=>{
 
 app.get("/api/public-status", async (_req,res)=>{
   await stateReady;
-  res.json({ok:true,version:"V15.3.4",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),sales:state.sales.length,platforms:state.platforms.length,publishedSites:state.publishedSites.length});
+  res.json({ok:true,version:"V15.3.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),sales:state.sales.length,platforms:state.platforms.length,publishedSites:state.publishedSites.length});
 });
 
 app.post("/api/demo/:id/event", async (req,res)=>{
@@ -167,7 +174,7 @@ app.post("/api/domain/connect", async (req,res)=>{
 });
 
 // URL pública limpa: mostra o site da demonstração, não o painel do Radar.
-// V15.3.4: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
+// V15.3.5: links curtos /site/XXXXXXXXXX não carregam dados do site na URL.
 // O servidor busca a demonstração pelo código curto e o navegador renderiza o site.
 app.get("/site/p/:id", (_req,res)=>{
   res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
@@ -189,4 +196,4 @@ app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incomp
 // IMPORTANTE: as rotas públicas vêm antes dos arquivos estáticos.
 // Assim /site/ID sempre entrega o shell do Radar, que então consulta /api/site/ID.
 app.use(express.static(ROOT));
-app.listen(PORT,()=>console.log(`Radar backend V15.3.4 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V15.3.5 em http://localhost:${PORT}`));

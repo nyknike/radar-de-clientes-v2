@@ -340,20 +340,17 @@ const inp=(path,label,type="text",ph="")=>`<label>${label}<input type="${type}" 
 const sel=(path,label,opts)=>`<label>${label}<select data-p="${path}">${opts.map(([v,t])=>`<option value="${esc(v)}" ${String(getP(ed,path))===v?"selected":""}>${esc(t)}</option>`).join("")}</select></label>`;
 const mini=(path,ph)=>`<input data-p="${path}" placeholder="${ph}" value="${esc(getP(ed,path)||"")}">`;
 function openEditor(p,mode){ed=JSON.parse(JSON.stringify(p));edMode=mode;tab=mode==="adm"?"funcoes":"dados";$("edTitle").textContent=mode==="adm"?"ADM — "+p.name:mode==="create"?"Criar site — "+p.name:"Editar — "+p.name;renderTab();$("editorDialog").showModal()}
+// V15.3.5: um único link canônico por projeto. A prévia, o botão de abrir,
+// copiar e enviar usam o ID do próprio site; o servidor resolve os dados.
 function publicSiteLinkFor(p){
  if(!p||!p.id)return "";
- return `${location.origin}/site/p/${encodeURIComponent(String(p.id))}`;
+ return `${location.origin}/site/${encodeURIComponent(String(p.id))}`;
 }
 function demoLinkFor(p){
- const sale=sales.find(s=>String(s.platformId||s.businessId)===String(p.id)||String(s.businessId)===String(p.id)||s.name===p.name);
- if(!sale||!sale.id)return "";
- // Link público curto: os dados ficam no servidor, nunca dentro de uma URL gigante.
- return `${location.origin}/site/${encodeURIComponent(String(sale.id))}`;
+ const sale=sales.find(s=>String(s.platformId||s.businessId)===String(p?.id)||String(s.businessId)===String(p?.id)||s.name===p?.name);
+ return sale&&sale.id?publicSiteLinkFor(p):"";
 }
-function publicLinkFor(p){
- const demo=demoLinkFor(p);
- return demo || publicSiteLinkFor(p);
-}
+function publicLinkFor(p){ return publicSiteLinkFor(p); }
 function admHeader(){const demo=demoLinkFor(ed);const pub=publicLinkFor(ed);return `<div class="adm-top"><div><span class="eyebrow-ui">🔐 ADM V9</span><strong>${esc(ed.name)}</strong><small>Edite e publique o site do cliente.</small></div><div class="adm-links"><button type="button" class="primary" data-act="open-local-preview">👁️ Abrir prévia</button>${demo?`<button type="button" data-act="open-public-demo">🌐 Abrir demonstração pública</button><button type="button" data-act="send-demo">📨 Enviar ao cliente</button>`:`<button type="button" data-act="open-public-site">🌐 Abrir site público</button>`}<button type="button" data-act="copy-public">📋 Copiar ${demo?"link da demonstração":"link público"}</button></div></div>`}
 function renderTab(){const T=TPL[tplKey(ed.type)];$("tabs").innerHTML=[["dados","① Informações"],["funcoes","② Funções"],["conteudo","③ Conteúdo"],["design","④ Visual"],["previa","⑤ Prévia"]].map(([k,v])=>`<button type="button" data-act="tab" data-v="${k}" class="${k===tab?"active":""}">${v}</button>`).join("");$("edBody").innerHTML=(edMode==="adm"?admHeader():"")+({dados:tabDados,funcoes:tabFuncoes,conteudo:tabConteudo,design:tabDesign,previa:tabPrevia})[tab]();if(tab==="previa")drawFrame()}
 function tabDados(){return`<div class="creator-intro"><div><span class="eyebrow-ui">CRIADOR V9</span><h3>Monte o site de ${esc(ed.name||"seu negócio")}</h3><p>O Radar gera uma primeira versão visual e conteúdo sugerido. Confirme tudo antes de publicar.</p></div><button type="button" class="primary" data-act="auto">✨ Gerar automaticamente</button></div><h4>1. Nível do site</h4><div class="level-grid">${Object.entries(LEVELS).map(([k,v])=>`<label class="level-card ${ed.level===k?"selected":""}"><input type="radio" name="site-level" data-p="level" value="${k}" ${ed.level===k?"checked":""}><strong>${v.name}</strong><span>${v.desc}</span></label>`).join("")}</div><h4>2. Informações</h4><div class="admin-grid">${sel("type","Tipo",Object.entries(labels))}${inp("name","Nome")}${inp("title","Título principal")}${inp("phone","Telefone")}${inp("whatsapp","WhatsApp")}${inp("instagram","Instagram")}</div>${inp("address","Endereço")}<label>Descrição<textarea data-p="description" rows="3">${esc(ed.description||"")}</textarea></label>`}
@@ -379,8 +376,8 @@ $("editorDialog").addEventListener("click",e=>{const b=e.target.closest("[data-a
  else if(a==="images"){repairImageRepetition(ed);renderTab();setStatus("Imagens reorganizadas: o Radar evita repetir a mesma foto no site.")}
  else if(a==="open-local-preview"){save();previewId=ed.id;drawPreview();$("previewDialog")?.showModal()}
 else if(a==="open-public-demo"){const u=demoLinkFor(ed);if(u)window.open(u,"_blank","noopener");else alert("Envie a demonstração ao cliente primeiro para gerar o link público.")}
-else if(a==="open-public-site"){window.open(publicSiteLinkFor(ed),"_blank","noopener")}
-else if(a==="copy-public"){copy(publicLinkFor(ed));b.textContent="✓ Link copiado";setTimeout(()=>b.textContent=demoLinkFor(ed)?"📋 Copiar link da demonstração":"📋 Copiar link público",1200)}
+else if(a==="open-public-site"){const p=persistEd();if(p)publish(p.id).then(ok=>{if(ok)window.open(publicSiteLinkFor(p),"_blank","noopener")})}
+else if(a==="copy-public"){const p=persistEd();if(p)publish(p.id).then(ok=>{if(ok){b.textContent="✓ Link copiado";setTimeout(()=>b.textContent=demoLinkFor(ed)?"📋 Copiar link da demonstração":"📋 Copiar link público",1200)}})}
  else if(a==="send-demo"){sendDemo(ed.id)}
  else if(a==="ai-image"){ed.banner=aiImageURL(ed.type,"hero",ed.name);renderTab();setStatus("URL de imagem IA preparada. O provedor pode exigir autenticação conforme a API usada.")}
  else if(a==="auto"){if(ed.items.some(x=>x.name)&&!confirm("Substituir título, descrição, itens e visual pelo conteúdo automático do tipo?"))return;fillContent(ed);renderTab();setStatus("Conteúdo automático aplicado. Ajuste itens e preços de exemplo.")}});
@@ -425,10 +422,9 @@ async function decompressText(token){
     return new TextDecoder().decode(buf);
   }catch{return null}
 }
-function makeCompactSiteLink(p,demoId){
-  // V15.3.4: links públicos são identificadores curtos; o conteúdo é buscado no servidor.
-  if(!demoId) return publicSiteLinkFor(p);
-  return `${location.origin}/site/${encodeURIComponent(String(demoId))}`;
+function makeCompactSiteLink(p,_demoId){
+  // V15.3.5: o link enviado é o mesmo link canônico do site, não um ID de venda.
+  return publicSiteLinkFor(p);
 }
 function shareLink(p,param){let n=0;const q=JSON.parse(JSON.stringify(p)),cut=s=>(s&&s.startsWith("data:"))?(n++,""):s;q.banner=cut(q.banner);q.gallery=(q.gallery||[]).map(cut).filter(Boolean);q.items=(q.items||[]).map(i=>({...i,img:cut(i.img)}));q.designImages=(q.designImages||[]).map(cut).filter(Boolean);(q.designProposals||[]).forEach(d=>d.images=(d.images||[]).map(cut));["staff","services","rooms","specialties"].forEach(k=>{if(Array.isArray(q[k]))q[k]=q[k].map(x=>({...x,img:cut(x.img)}))});return{url:location.origin+location.pathname+"?"+param+"="+enc(q),stripped:n}}
 async function sendDemo(id){
@@ -441,7 +437,12 @@ async function sendDemo(id){
   sale.publishedUrl=url;sale.updatedAt=new Date().toISOString();saveSales();
   const saved=await persistServerState();
   if(!saved){
-    alert("Não foi possível confirmar o salvamento do site no servidor. O link não será enviado, porque ele poderia funcionar apenas neste navegador/instância. Configure o armazenamento persistente do Render (ex.: Supabase) e tente novamente.");
+    alert("Não foi possível confirmar o salvamento dos dados no servidor. O link não será enviado.");
+    return;
+  }
+  const registered=await publishPublicRegistry(p);
+  if(!registered){
+    alert("O servidor não confirmou o registro público deste site. O link não será enviado para evitar Not Found.");
     return;
   }
   let number=phoneDigits(sale.whatsapp||sale.phone||"");if(number.length===10||number.length===11)number="55"+number;
