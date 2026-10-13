@@ -2,6 +2,10 @@ import express from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+const execFileAsync = promisify(execFile);
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -9,48 +13,101 @@ const ROOT = process.cwd();
 app.use(express.json({limit:"25mb"}));
 app.use((req,res,next)=>{ if(req.path==="/"||req.path==="/index.html"||(req.path.startsWith("/demo/")||req.path.startsWith("/site/"))||req.path.endsWith(".js")||req.path.endsWith(".css")){res.setHeader("Cache-Control","no-store, no-cache, must-revalidate, proxy-revalidate");res.setHeader("Pragma","no-cache");res.setHeader("Expires","0");} next(); });
 
-// V15.2.7: estado comercial persistente no servidor. Em hospedagens efêmeras,
-// configure um disco persistente e DATA_DIR para manter os dados entre deploys.
+// V18.0.0: o banco remoto é obrigatório em produção. O arquivo local é apenas
+// fallback de desenvolvimento; o disco efêmero do Render não é armazenamento durável.
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, "data");
 const STATE_FILE = path.join(DATA_DIR, "radar-state.json");
+const isProduction = process.env.NODE_ENV === "production";
 let state = { sales: [], platforms: [], events: [], publishedSites: [] };
+const storage = { configured: false, connected: false, error: null, checkedAt: null };
+function normalizeState(x={}) {
+  return {
+    sales: Array.isArray(x.sales) ? x.sales : [],
+    platforms: Array.isArray(x.platforms) ? x.platforms : [],
+    events: Array.isArray(x.events) ? x.events : [],
+    publishedSites: Array.isArray(x.publishedSites) ? x.publishedSites : []
+  };
+}
 function loadState(){
-  try { fs.mkdirSync(DATA_DIR,{recursive:true}); if(fs.existsSync(STATE_FILE)){ const x=JSON.parse(fs.readFileSync(STATE_FILE,"utf8")); state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[],publishedSites:Array.isArray(x.publishedSites)?x.publishedSites:[]}; } }
-  catch(err){ console.error("Não foi possível carregar o estado persistente:",err.message); }
+  try {
+    fs.mkdirSync(DATA_DIR,{recursive:true});
+    if(fs.existsSync(STATE_FILE)) state=normalizeState(JSON.parse(fs.readFileSync(STATE_FILE,"utf8")));
+  } catch(err) { console.error("Não foi possível carregar o estado local:",err.message); }
 }
 async function loadRemoteState(){
   const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if(!url||!key)return;
+  storage.configured=!!(url&&key);
+  storage.checkedAt=new Date().toISOString();
+  if(!url||!key){
+    storage.connected=false;
+    storage.error="Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no serviço Web do Render.";
+    return false;
+  }
   try{
-    const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state?id=eq.1&select=state`,{headers:{apikey:key,Authorization:`Bearer ${key}`,Accept:"application/json"}});
-    if(!r.ok)throw new Error(`Supabase HTTP ${r.status}`);
-    const rows=await r.json(); if(rows[0]?.state){const x=rows[0].state;state={sales:Array.isArray(x.sales)?x.sales:[],platforms:Array.isArray(x.platforms)?x.platforms:[],events:Array.isArray(x.events)?x.events:[],publishedSites:Array.isArray(x.publishedSites)?x.publishedSites:[]};}
-  }catch(err){console.error("Falha ao carregar Supabase; usando arquivo local:",err.message)}
+    const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state?id=eq.1&select=state`,{
+      headers:{apikey:key,Authorization:`Bearer ${key}`,Accept:"application/json"},
+      signal:AbortSignal.timeout(10000)
+    });
+    if(!r.ok) throw new Error(`Supabase HTTP ${r.status}: ${(await r.text()).slice(0,240)}`);
+    const rows=await r.json();
+    state=normalizeState(rows[0]?.state || {});
+    storage.connected=true; storage.error=null;
+    return true;
+  }catch(err){
+    storage.connected=false;
+    storage.error=err.message;
+    console.error("Falha ao conectar ao Supabase:",err.message);
+    return false;
+  }
 }
 async function persistState(){
   const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(url&&key){
-    try{const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state`,{method:"POST",headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({id:1,state,updated_at:new Date().toISOString()})});if(!r.ok)throw new Error(`Supabase HTTP ${r.status}`);return true;}
-    catch(err){console.error("Falha ao salvar Supabase:",err.message);return false;}
+    try{
+      const r=await fetch(`${url.replace(/\/$/,"")}/rest/v1/radar_state?on_conflict=id`,{
+        method:"POST",
+        headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=minimal"},
+        body:JSON.stringify({id:1,state,updated_at:new Date().toISOString()}),
+        signal:AbortSignal.timeout(10000)
+      });
+      if(!r.ok) throw new Error(`Supabase HTTP ${r.status}: ${(await r.text()).slice(0,240)}`);
+      storage.connected=true; storage.error=null; storage.checkedAt=new Date().toISOString();
+      return true;
+    }catch(err){ storage.connected=false; storage.error=err.message; console.error("Falha ao salvar Supabase:",err.message); return false; }
   }
+  if(isProduction){ storage.connected=false; storage.error="Banco persistente não configurado em produção."; return false; }
   try { fs.mkdirSync(DATA_DIR,{recursive:true}); const tmp=STATE_FILE+".tmp"; fs.writeFileSync(tmp,JSON.stringify(state,null,2)); fs.renameSync(tmp,STATE_FILE); return true; }
-  catch(err){ console.error("Não foi possível salvar o estado persistente:",err.message); return false; }
+  catch(err){ console.error("Não foi possível salvar o estado local:",err.message); return false; }
 }
-loadState();
-const stateReady=loadRemoteState();
+if(isProduction){ /* nunca carregar um arquivo efêmero como se fosse banco persistente */ }
+else { loadState(); storage.connected=true; storage.error=null; }
+const stateReady = isProduction ? loadRemoteState() : Promise.resolve(true);
+async function requireStorage(res){
+  await stateReady;
+  if(isProduction && !storage.connected) await loadRemoteState();
+  if(isProduction && !storage.connected){
+    res.status(503).json({ok:false,error:"Armazenamento persistente indisponível. Configure/verifique o Supabase antes de publicar ou salvar sites.",storage:{configured:storage.configured,connected:false,detail:storage.error}});
+    return false;
+  }
+  return true;
+}
 
 const cfg = {
   payment: process.env.MP_ACCESS_TOKEN ? "mercadopago" : "manual",
-  hosting: process.env.CLOUDFLARE_API_TOKEN ? "cloudflare" : "manual",
+  hosting: process.env.CLOUDFLARE_API_TOKEN && process.env.CLOUDFLARE_ACCOUNT_ID ? "cloudflare" : "manual",
   domain: process.env.DOMAIN_PROVIDER ? process.env.DOMAIN_PROVIDER : "manual"
 };
 
-app.get("/api/health", (_req,res)=>res.json({ok:true,version:"V15.3.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),integrations:cfg}));
+app.get("/api/health", async (_req,res)=>{
+  await stateReady;
+  if(isProduction && !storage.connected) await loadRemoteState();
+  res.status(200).json({ok:true,version:"V19.0.0",persistentStorage:storage.connected,storage:{configured:storage.configured,connected:storage.connected,error:storage.connected?null:storage.error,checkedAt:storage.checkedAt},integrations:cfg});
+});
 
 // O servidor é a fonte compartilhada dos dados entre dispositivos.
-app.get("/api/state", async (_req,res)=>{await stateReady;res.json({ok:true,state});});
+app.get("/api/state", async (_req,res)=>{if(!await requireStorage(res)) return;res.json({ok:true,state});});
 app.put("/api/state", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   const body=req.body||{};
   if(body.sales!==undefined){ if(!Array.isArray(body.sales)) return res.status(400).json({ok:false,error:"sales precisa ser uma lista."}); state.sales=body.sales; }
   if(body.platforms!==undefined){ if(!Array.isArray(body.platforms)) return res.status(400).json({ok:false,error:"platforms precisa ser uma lista."}); state.platforms=body.platforms; }
@@ -58,7 +115,7 @@ app.put("/api/state", async (req,res)=>{
   res.json({ok:true,savedAt:new Date().toISOString()});
 });
 app.get("/api/demo/:id", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   const code=String(req.params.id);
   const sale=state.sales.find(x=>String(x.id)===code||String(x.id).replace(/-/g,"").startsWith(code));
   if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
@@ -67,7 +124,7 @@ app.get("/api/demo/:id", async (req,res)=>{
 });
 
 app.get("/api/site/:id", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   res.setHeader("Cache-Control","no-store, no-cache, must-revalidate");
   const id=String(req.params.id||"").trim();
   if(!id) return res.status(400).json({ok:false,error:"ID do site obrigatório."});
@@ -92,25 +149,29 @@ app.get("/api/site/:id", async (req,res)=>{
 });
 
 app.put("/api/public-sites/:id", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   const id=String(req.params.id||"").trim(), platform=req.body?.platform;
-  if(!id||!platform||String(platform.id)!==id) return res.status(400).json({ok:false,error:"Dados do site público inválidos."});
-  const item={id,platform,updatedAt:new Date().toISOString()};
+  const html=typeof req.body?.html==="string"?req.body.html:null;
+  if(!id||id.length>120||!platform||String(platform.id)!==id) return res.status(400).json({ok:false,error:"Dados do site público inválidos."});
+  if(html && (!/^\s*<!doctype html/i.test(html) || html.length>4*1024*1024)) return res.status(413).json({ok:false,error:"O HTML do site precisa ser completo e ter até 4 MB. Reduza imagens muito grandes e tente novamente."});
+  const previous=state.publishedSites.find(x=>String(x.id)===id);
+  const item={...(previous||{}),id,platform,updatedAt:new Date().toISOString()};
+  if(html) item.html=html;
   const i=state.publishedSites.findIndex(x=>String(x.id)===id);
   if(i<0) state.publishedSites.push(item); else state.publishedSites[i]=item;
   const pi=state.platforms.findIndex(x=>String(x.id)===id);
   if(pi<0) state.platforms.push(platform); else state.platforms[pi]=platform;
   if(!await persistState()) return res.status(500).json({ok:false,error:"Não foi possível salvar o site público no servidor."});
-  res.json({ok:true,id,updatedAt:item.updatedAt});
+  res.json({ok:true,id,updatedAt:item.updatedAt,htmlStored:!!item.html});
 });
 
 app.get("/api/public-status", async (_req,res)=>{
-  await stateReady;
-  res.json({ok:true,version:"V15.3.5",persistentStorage:!!(process.env.SUPABASE_URL&&process.env.SUPABASE_SERVICE_ROLE_KEY),sales:state.sales.length,platforms:state.platforms.length,publishedSites:state.publishedSites.length});
+  if(!await requireStorage(res)) return;
+  res.json({ok:true,version:"V19.0.0",persistentStorage:storage.connected,sales:state.sales.length,platforms:state.platforms.length,publishedSites:state.publishedSites.length});
 });
 
 app.post("/api/demo/:id/event", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   const code=String(req.params.id);
   const sale=state.sales.find(x=>String(x.id)===code||String(x.id).replace(/-/g,"").startsWith(code));
   if(!sale) return res.status(404).json({ok:false,error:"Demonstração não encontrada."});
@@ -157,11 +218,67 @@ app.post("/api/payment/webhook",(req,res)=>{
   res.sendStatus(200);
 });
 
+const cloudflarePublishTimes = new Map();
+const CF_API="https://api.cloudflare.com/client/v4";
+function safeProjectName(value){
+  const v=String(value||"").toLowerCase().replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,48);
+  return /^[a-z0-9][a-z0-9-]*$/.test(v)?v:"radar-clientes-sites";
+}
+async function cfApi(url, options={}){
+  const response=await fetch(url,{...options,headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,...(options.headers||{})},signal:AbortSignal.timeout(20000)});
+  const data=await response.json().catch(()=>({success:false,errors:[{message:"Resposta inválida da API Cloudflare."}]}));
+  if(!response.ok||data.success===false) throw new Error((data.errors||[]).map(x=>x.message).filter(Boolean).join("; ")||`Cloudflare HTTP ${response.status}`);
+  return data.result;
+}
+async function ensurePagesProject(projectName){
+  const base=`${CF_API}/accounts/${encodeURIComponent(process.env.CLOUDFLARE_ACCOUNT_ID)}/pages/projects`;
+  const check=await fetch(`${base}/${encodeURIComponent(projectName)}`,{headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`},signal:AbortSignal.timeout(15000)});
+  if(check.ok){const d=await check.json();if(d.success&&d.result)return d.result;throw new Error((d.errors||[]).map(x=>x.message).join("; ")||"Não foi possível verificar o projeto Cloudflare Pages.");}
+  if(check.status!==404){const d=await check.json().catch(()=>({}));throw new Error((d.errors||[]).map(x=>x.message).join("; ")||`Cloudflare HTTP ${check.status} ao verificar projeto.`);}
+  return await cfApi(base,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:projectName,production_branch:"main"})});
+}
 app.post("/api/publish/cloudflare", async (req,res)=>{
   if(!process.env.CLOUDFLARE_API_TOKEN||!process.env.CLOUDFLARE_ACCOUNT_ID){
     return res.status(503).json({ok:false,configured:false,error:"Cloudflare ainda não configurado no servidor."});
   }
-  return res.status(501).json({ok:false,error:"Conector de deployment reservado para a etapa de publicação segura. Nenhuma chave é enviada ao navegador."});
+  if(!await requireStorage(res)) return;
+  const id=String(req.body?.id||"").trim();
+  if(!id||id.length>120) return res.status(400).json({ok:false,configured:true,error:"ID de site inválido."});
+  const site=state.publishedSites.find(x=>String(x.id)===id);
+  if(!site?.html) return res.status(409).json({ok:false,configured:true,error:"Este projeto ainda não tem uma versão HTML pronta para publicar. Abra o projeto, salve/publice novamente e tente outra vez."});
+  const now=Date.now(), client=String(req.ip||req.socket?.remoteAddress||"unknown"), previous=cloudflarePublishTimes.get(client)||0;
+  if(now-previous<15000) return res.status(429).json({ok:false,configured:true,error:"Aguarde 15 segundos antes de iniciar outra publicação."});
+  cloudflarePublishTimes.set(client,now);
+  const projectName=safeProjectName(process.env.CLOUDFLARE_PAGES_PROJECT||"radar-clientes-sites");
+  const sites=state.publishedSites.filter(x=>typeof x.html==="string"&&x.html.length>0);
+  if(sites.length>1000) return res.status(413).json({ok:false,configured:true,error:"Há muitos sites guardados para uma publicação única. Separe os projetos antes de continuar."});
+  const totalBytes=sites.reduce((n,x)=>n+Buffer.byteLength(x.html,"utf8"),0);
+  if(totalBytes>20*1024*1024) return res.status(413).json({ok:false,configured:true,error:"O total dos sites publicados ultrapassa 20 MB. Reduza imagens incorporadas nos sites e tente novamente."});
+  let tempDir;
+  try{
+    await ensurePagesProject(projectName);
+    tempDir=await fs.promises.mkdtemp(path.join(os.tmpdir(),"radar-pages-"));
+    for(const item of sites){
+      const slug=String(item.id).replace(/[^a-zA-Z0-9_-]/g,"-").slice(0,120);
+      if(!slug) continue;
+      const target=path.join(tempDir,"site",slug,"index.html");
+      await fs.promises.mkdir(path.dirname(target),{recursive:true});
+      await fs.promises.writeFile(target,item.html,"utf8");
+    }
+    const wrangler=path.join(ROOT,"node_modules","wrangler","bin","wrangler.js");
+    await execFileAsync(process.execPath,[wrangler,"pages","deploy",tempDir,"--project-name",projectName,"--branch","main"],{
+      cwd:ROOT,timeout:180000,maxBuffer:2*1024*1024,env:{...process.env,CLOUDFLARE_ACCOUNT_ID:process.env.CLOUDFLARE_ACCOUNT_ID,CLOUDFLARE_API_TOKEN:process.env.CLOUDFLARE_API_TOKEN}
+    });
+    const url=`https://${projectName}.pages.dev/site/${encodeURIComponent(String(id))}/`;
+    const current=state.publishedSites.findIndex(x=>String(x.id)===id);
+    if(current>=0){state.publishedSites[current]={...state.publishedSites[current],cloudflareUrl:url,cloudflareProject:projectName,cloudflarePublishedAt:new Date().toISOString()};}
+    if(!await persistState()) return res.status(500).json({ok:false,configured:true,error:"A Cloudflare publicou o conteúdo, mas não foi possível salvar o endereço no banco. Tente salvar o projeto novamente."});
+    res.json({ok:true,configured:true,url,project:projectName,publishedSites:sites.length});
+  }catch(err){
+    const detail=[err.message,err.stderr].filter(Boolean).join(" | ");
+    console.error("Falha na publicação Cloudflare Pages:",detail);
+    res.status(502).json({ok:false,configured:true,error:`A publicação Cloudflare falhou: ${String(detail||"erro desconhecido").slice(0,700)}`});
+  }finally{if(tempDir) await fs.promises.rm(tempDir,{recursive:true,force:true}).catch(()=>{});}
 });
 
 app.post("/api/domain/connect", async (req,res)=>{
@@ -187,13 +304,15 @@ app.get("/site/:id", (_req,res)=>{
 });
 
 app.get("/demo/:id", async (req,res)=>{
-  await stateReady;
+  if(!await requireStorage(res)) return;
   res.setHeader("Cache-Control","no-store");
   res.redirect(302, `/site/${encodeURIComponent(String(req.params.id))}`);
 });
 app.get("/demo", (_req,res)=>res.status(400).send("Link de demonstração incompleto. Use o link enviado pelo Radar."));
 
+app.use("/data", (_req,res)=>res.sendStatus(404));
+
 // IMPORTANTE: as rotas públicas vêm antes dos arquivos estáticos.
 // Assim /site/ID sempre entrega o shell do Radar, que então consulta /api/site/ID.
 app.use(express.static(ROOT));
-app.listen(PORT,()=>console.log(`Radar backend V15.3.5 em http://localhost:${PORT}`));
+app.listen(PORT,()=>console.log(`Radar backend V19.0.0 em http://localhost:${PORT}`));

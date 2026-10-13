@@ -1,66 +1,39 @@
-RADAR DE CLIENTES — V15.2.5
+RADAR DE CLIENTES — V19.0.0
 
-Base: V14.3.2. O Designer, Radar, Central de Projetos e funções anteriores foram preservados.
+BASE PRESERVADA
+Esta versão parte da V18.0.0 e preserva o painel de prospecção, designer, projetos salvos, prévia pública, revisão automática, estado no Supabase e fluxo comercial.
 
-NOVO: FLUXO COMERCIAL
-Encontrar empresa → Analisar oportunidade → Abordar → Criar demonstração → Cliente vê a prévia → Cliente aprova → Cliente paga → Projeto em produção → Site publicado → Domínio conectado → Manutenção → Renovação.
+NOVA INTEGRAÇÃO: CLOUDFLARE PAGES
+- A rota /api/publish/cloudflare deixou de ser um placeholder 501 e tenta publicar sites estáticos no Cloudflare Pages via Wrangler.
+- O HTML autônomo do site é salvo junto ao registro público e publicado em /site/ID/ no projeto Pages compartilhado.
+- A cada publicação, o pacote inclui todos os sites que já tenham HTML salvo no banco; assim, os sites publicados anteriormente não são removidos quando um novo site é publicado.
+- O token Cloudflare fica exclusivamente nas variáveis de ambiente do servidor, nunca no navegador ou no repositório.
+- Projeto Pages padrão: radar-clientes-sites. Pode ser alterado pela variável CLOUDFLARE_PAGES_PROJECT (somente letras minúsculas, números e hífens após normalização).
 
-Cada cliente fica salvo no pipeline comercial local para acompanhar a etapa, valor, domínio, serviço e URL publicada.
+VARIÁVEIS NO RENDER
+Obrigatórias para publicação Cloudflare:
+- CLOUDFLARE_API_TOKEN — token com Account / Cloudflare Pages / Edit.
+- CLOUDFLARE_ACCOUNT_ID — Account ID, não Zone ID.
+Opcionais:
+- CLOUDFLARE_PAGES_PROJECT — nome do projeto Pages (padrão radar-clientes-sites).
+Manter também SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY, além de NODE_ENV=production.
 
-BACKEND SEGURO
-- server.js fornece a base para integrações que precisam de segredo.
-- Credenciais nunca devem ficar no app.js.
-- Mercado Pago: definir MP_ACCESS_TOKEN no servidor. O endpoint /api/payment/create cria um checkout e /api/payment/webhook recebe eventos.
-- Cloudflare: definir CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID. O conector de publicação/domínio fica separado do navegador.
-- Domínio: definir DOMAIN_PROVIDER quando o registrador/provedor homologado escolhido estiver definido.
+COMO SUBIR AO GITHUB/RENDER
+1. Faça backup do repositório atual antes de substituir arquivos.
+2. Extraia o ZIP e envie o CONTEÚDO da pasta radar-de-clientes-v19.0.0 para a raiz do repositório GitHub conectado ao Render. Não envie a pasta pai como uma segunda pasta dentro do repositório.
+3. Inclua server.js, app.js, index.html, style.css, package.json, render.yaml, logo.png, supabase-setup.sql e README.txt.
+4. Faça commit e push para a branch que o Render usa (geralmente main). O Render executará npm install e npm start.
+5. Não remova nem substitua variáveis secretas já existentes no Render. Confirme CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID na seção Environment.
+6. Após o deploy, abra /api/health e confira version=V19.0.0, persistentStorage=true e integrations.hosting=cloudflare.
+7. Publique um site de teste. O primeiro deploy cria o projeto Pages se ainda não existir. A URL deverá ser https://radar-clientes-sites.pages.dev/site/ID/ (ou o nome configurado).
 
-IMPORTANTE
-A interface V15 registra todo o fluxo mesmo sem credenciais. Isso permite testar o produto sem inventar uma integração funcionando. A cobrança e a publicação reais só mudam de modo manual para automático quando as credenciais e o provedor estiverem configurados no backend.
+IMPORTANTE SOBRE GITHUB
+O conector GitHub desta sessão não mostrou nenhum repositório acessível para fazer push direto. Por isso, este ZIP está preparado para você enviar ao repositório existente; não afirmo que o código já foi enviado ao GitHub ou publicado no Render.
 
-
-V15.2.5 — ASSISTENTE GUIADO E CADASTRO COMERCIAL
-- A interface do fluxo comercial foi substituída por uma etapa atual de cada vez.
-- O Radar pode selecionar a empresa com melhor pontuação entre os resultados atuais.
-- Demonstrações podem ser enviadas por link; a página registra visita e permite aprovação explícita.
-- Clientes, projetos e estados são sincronizados com /api/state e gravados em data/radar-state.json no servidor.
-- Para manter dados entre reinicializações/deploys no Render, configure um disco persistente e defina DATA_DIR para o caminho do disco. Sem disco persistente, arquivos no sistema de arquivos do serviço podem ser apagados em novo deploy.
-- A aprovação é registrada pela página pública; isso não substitui um contrato nem confirma pagamento.
-- Pagamento automático, respostas automáticas de WhatsApp, publicação Cloudflare e domínio continuam fora do escopo desta versão.
-- Se o backend não estiver disponível, o navegador mantém cópia local e avisa que não está sincronizado.
-
-CONFIGURAÇÃO OPCIONAL DO SUPABASE PARA DADOS DURÁVEIS
-1. Crie um projeto Supabase.
-2. No SQL Editor, execute:
-
-create table if not exists public.radar_state (
-  id integer primary key,
-  state jsonb not null default '{"sales":[],"platforms":[],"events":[]}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-3. Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY como variáveis secretas do serviço backend no Render. Nunca coloque a service role key no app.js.
-4. O backend tenta carregar/salvar no Supabase quando as duas variáveis existem; caso contrário usa arquivo local, que pode ser perdido em redeploy/reinicialização do serviço gratuito.
-
-
-CORREÇÃO V15.2.5 — LINK DE DEMONSTRAÇÃO
-- O botão “Enviar demonstração” agora gera um link limpo /demo/ID que abre o site criado, sem mostrar a interface do Radar.
-- Quando existe telefone/WhatsApp no cadastro, o sistema abre a conversa com uma mensagem e o link da demonstração preenchidos. Você ainda precisa tocar em Enviar no WhatsApp.
-- A página pública registra visualização e permite aprovação explícita.
-- O link /demo/ID exige que a demonstração e o projeto estejam sincronizados com o backend.
-
-
-V15.2.5 — CORREÇÃO DO LINK DE DEMONSTRAÇÃO E IDENTIFICAÇÃO DE VERSÃO
-- A versão exibida no cabeçalho do Radar e no endpoint /api/health agora é V15.2.5.
-- O HTML, CSS e JavaScript usam identificadores de cache V15.2.5 e cabeçalhos sem cache.
-- A rota /demo/:id entrega o index.html para o carregamento da demonstração.
-- IMPORTANTE: publique como serviço Web Node (npm install / npm start), não como Static Site, pois a demonstração depende das rotas /api.
-- Após publicar, confira no topo se aparece V15.2.5. Se continuar mostrando V15.2 ou outra versão, o deploy não está usando estes arquivos.
-
-
-V15.3.3 — Correção definitiva dos links públicos: as demonstrações usam URLs curtas no formato /site/ID e o conteúdo é recuperado pelo servidor. Não há mais dados do site codificados em ?site=... na URL. /demo/:id antigo redireciona para a rota curta quando usado.
-
-
-V15.3.3 — Link público reconstruído: /site/ID e /site/p/ID não dependem de localStorage; o envio da demonstração só confirma o link após persistência no servidor. Adicionado /api/public-status e resolução exata por ID.
-
-
-V15.3.5 — Link público canônico: abrir, copiar e enviar usam /site/ID do próprio projeto. O servidor associa a demonstração ao ID do projeto e mantém compatibilidade com links antigos de venda.
+LIMITES E SEGURANÇA
+- O deploy foi implementado, mas precisa ser testado com as credenciais reais da conta Cloudflare; a criação/publicação não foi executada a partir deste ambiente.
+- Para evitar um bundle excessivo, o servidor limita o HTML de cada site a 4 MB e o conjunto a 20 MB por publicação.
+- O servidor publica os sites já registrados com HTML. Sites antigos da V18 precisam ser salvos/publicados novamente para gerar esse HTML.
+- A rota de publicação está exposta no backend existente sem login de administrador; antes de vender/publicar comercialmente, adicione autenticação de administrador ou um segredo de publicação. Não compartilhe a URL do painel publicamente.
+- Cloudflare Pages hospeda o HTML estático; o painel e os dados do Radar continuam no Render/Supabase.
+- Pagamentos automáticos e conexão automática de domínio personalizado ainda não estão implementados nesta versão.
